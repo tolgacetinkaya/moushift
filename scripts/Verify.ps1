@@ -21,8 +21,6 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Drag card verification failed.' }
         dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-circle (Join-Path $clickloomRoot ('docs\ui-011\folder-' + $circleTheme + '.png')) --folder ('--theme=' + $circleTheme)
         if ($LASTEXITCODE -ne 0) { throw 'Circle folder arc capture failed.' }
-        dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-hid-learning (Join-Path $clickloomRoot ('docs\ui-012\learning-' + $circleTheme + '.png')) --verify-hid ('--theme=' + $circleTheme)
-        if ($LASTEXITCODE -ne 0) { throw 'HID learning preview failed.' }
     }
     dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-circle-editor (Join-Path $clickloomRoot 'docs\ui-0111\empty-folder.png') --empty-folder --theme=light
     if ($LASTEXITCODE -ne 0) { throw 'Empty folder shortcut entry capture failed.' }
@@ -52,12 +50,6 @@ try {
     }
     dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-devices (Join-Path $clickloomRoot 'docs/ui-0142/compact-dark.png') --design-fixture --compact --collapsed-nav --edit-circle --theme=dark
     if ($LASTEXITCODE -ne 0) { throw 'Collapsed compact Circle workspace failed.' }
-    foreach ($learningTheme in @('light', 'dark')) {
-        dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-devices (Join-Path $clickloomRoot ('docs/ui-0144/learning-' + $learningTheme + '.png')) --design-fixture --teach-button ('--theme=' + $learningTheme)
-        if ($LASTEXITCODE -ne 0) { throw 'Embedded learning workspace failed.' }
-    }
-    dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-devices (Join-Path $clickloomRoot 'docs/ui-0144/learning-compact.png') --design-fixture --compact --teach-button --theme=dark
-    if ($LASTEXITCODE -ne 0) { throw 'Compact embedded learning workspace failed.' }
     if ($InteractiveUi) {
         dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-preview (Join-Path $clickloomRoot 'docs\clickloom-preview.png') --verify-ui --theme=light
         if ($LASTEXITCODE -ne 0) { throw 'WPF editor verification failed.' }

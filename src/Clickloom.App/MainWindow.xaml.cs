@@ -620,10 +620,6 @@ public partial class MainWindow : Window
             _lastInputShown = DateTime.UtcNow; InputStatusText.Text = "↳ " + name;
         });
     }
-    private void IdentifyInput_Click(object sender, RoutedEventArgs e)
-    {
-        OpenHidLearning();
-    }
     private void UpdateEngineState()
     {
         if (_disposed || _service is null) return;
@@ -674,7 +670,6 @@ public partial class MainWindow : Window
     {
         if (page == "mappings" && _selectedDevice?.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse to edit its separate profile."; return; }
         if (!TryCloseCircleEditor()) return;
-        if (_learningEditor is not null) CloseLearningWorkspace();
         if (page == "devices")
         {
             _selectedDevice = null; _editingSavedProfile = false;
@@ -749,7 +744,6 @@ public partial class MainWindow : Window
         if (sender is not System.Windows.Controls.Button { Tag: DeviceCard device }) return;
         if (device.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse. Previous shared assignments are kept for import."; return; }
         if (!TryCloseCircleEditor()) return;
-        if (_learningEditor is not null) CloseLearningWorkspace();
         _selectedDevice = device;
         _editingSavedProfile = false;
         var profile = _settings.Profiles.FirstOrDefault(p => p.DeviceKey == device.DeviceKey && p.ApplicationPath is null);
@@ -880,9 +874,8 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_exiting) return;
-        if (_previewOnly) { CloseLearningWorkspace(); ReleaseCircleWorkspace(); _exiting = true; DisposeRuntime(); System.Windows.Application.Current.Shutdown(); return; }
+        if (_previewOnly) { ReleaseCircleWorkspace(); _exiting = true; DisposeRuntime(); System.Windows.Application.Current.Shutdown(); return; }
         if (!TryCloseCircleEditor()) { e.Cancel = true; return; }
-        if (_learningEditor is not null) CloseLearningWorkspace();
         e.Cancel = true; Hide();
         _tray?.ShowBalloonTip(2500, "Moushift is still running", "Choose Quit in the tray menu to close Moushift completely.", System.Windows.Forms.ToolTipIcon.Info);
     }
@@ -891,7 +884,7 @@ public partial class MainWindow : Window
     {
         if (_disposed) return;
         _disposed = true; _statusTimer?.Stop();
-        CloseLearningWorkspace(); CloseRingVisual();
+        CloseRingVisual();
         StopDeviceActivity();
         _service?.Dispose();
         if (_tray is not null) { _tray.Visible = false; _tray.ContextMenuStrip?.Dispose(); _tray.Dispose(); }

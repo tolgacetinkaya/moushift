@@ -68,6 +68,9 @@ public sealed partial class RingEditorWindow : Window
         var history = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         _undo.Click += (_, _) => History(false); _redo.Click += (_, _) => History(true); _undo.Margin = new(0, 0, 6, 0); history.Children.Add(_undo); history.Children.Add(_redo);
         DockPanel.SetDock(history, Dock.Right); header.Children.Add(history);
+        var backToButtons = new Button { Content = "‹ Back to buttons", Margin = new(0, 0, 18, 0), VerticalAlignment = VerticalAlignment.Center };
+        backToButtons.Click += (_, _) => { if (_hostedClose is not null) _hostedClose(); else Close(); };
+        DockPanel.SetDock(backToButtons, Dock.Left); header.Children.Add(backToButtons);
         var heading = new StackPanel(); heading.Children.Add(Text("Click Circle", 27));
         var subtitle = Text(deviceName ?? Profile.DeviceName ?? "Circle workspace", 13, "Muted"); subtitle.Margin = new(0, 5, 0, 0); heading.Children.Add(subtitle); header.Children.Add(heading); root.Children.Add(header);
         var contexts = new DockPanel { Margin = new(28, 0, 28, 14) };
@@ -109,7 +112,6 @@ public sealed partial class RingEditorWindow : Window
         var libraryBorder = new Border { Background = B("Panel"), CornerRadius = new(16), Child = library }; Grid.SetColumn(libraryBorder, 2); body.Children.Add(libraryBorder); Grid.SetRow(body, 2); root.Children.Add(body);
         var footer = new DockPanel { Margin = new(28, 16, 28, 20) }; var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         var preview = new Button { Content = "Preview", Margin = new(8, 0, 8, 0) }; preview.Click += (_, _) => { _preview?.Close(); _preview = new RingWindow(Slots, true); _preview.Show(); _preview.PositionAtCursor(); }; buttons.Children.Add(preview);
-        var cancel = new Button { Content = "Back to buttons", Margin = new(0, 0, 8, 0) }; cancel.Click += (_, _) => { if (_hostedClose is not null) _hostedClose(); else Close(); }; buttons.Children.Add(cancel);
         var save = new Button { Content = "Save changes", Style = (Style)FindResource("Primary") };
         save.Click += (_, _) => { var candidate = _draft.DeepClone(); ApplyTo(candidate); var errors = SettingsValidator.Validate(candidate); if (errors.Count > 0) SetStatus(string.Join(" ", errors), true); else if (_hostedSave is not null) _hostedSave(); else DialogResult = true; }; buttons.Children.Add(save);
         DockPanel.SetDock(buttons, Dock.Right); footer.Children.Add(buttons); _status.Foreground = B("Muted"); footer.Children.Add(_status); Grid.SetRow(footer, 3); root.Children.Add(footer);
@@ -316,7 +318,7 @@ public sealed partial class RingEditorWindow : Window
                 var row = new Border { Child = content, Background = B("Bg"), CornerRadius = new(8), Padding = new(12), Margin = new(0, 3, 0, 3), Cursor = Cursors.Hand, ToolTip = "Drag to a position, or double-click to add" };
                 WireDrag(row, new PlacementDrag(_profileId, definition, null)); row.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2) { if (_selected is not null) PlaceDefinition(definition, _selected, false); else if (_folder.Count > 0) PlaceDefinition(definition, _folder.Append(RingNavigation.Resolve(Slots, _folder)!.Children.Count).ToArray(), true); else SetStatus("Select a position first.", true); e.Handled = true; } }; list.Children.Add(row);
             }
-            _catalog.Children.Add(new Expander { Header = category.Key.Category, Content = list, IsExpanded = true, Foreground = B("Muted"), Margin = new(0, 4, 0, 10), Padding = new(0, 6, 0, 0) });
+            _catalog.Children.Add(new Expander { Header = category.Key.Category, Content = list, IsExpanded = query.Length > 0, Foreground = B("Muted"), Margin = new(0, 4, 0, 10), Padding = new(0, 6, 0, 0) });
         }
         if (actions.Length == 0) _catalog.Children.Add(Text("No matching actions", 13, "Muted"));
     }
