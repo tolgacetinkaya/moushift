@@ -7,6 +7,23 @@ namespace Clickloom.App;
 
 public partial class MainWindow
 {
+    internal void AddThirdDesignDevice()
+    {
+        _deviceCards.Add(new("preview:razer", "Razer Mouse Dock Pro", "Razer", "Receiver connected", ThemeManager.Brush("Accent"), "preview:razer"));
+        ApplyWorkspaceSizing();
+    }
+
+    internal void PrepareWorkspaceCapture(string[] args)
+    {
+        if (args.Contains("--collapsed-nav")) ToggleSidebar_Click(this, new RoutedEventArgs());
+        if (args.Contains("--edit-positions")) ShowButtonPositions();
+        if (args.Contains("--edit-positions") && args.Contains("--edit-button")) PrepareDesignButtonEditor();
+        if (args.Contains("--edit-circle")) OpenCircleWorkspace();
+        UpdateLayout(); PlaceMarkers();
+        if (_circleEditor is not null && args.Contains("--folder")) _circleEditor.ShowFolderPreview();
+        if (_circleEditor is not null && args.Contains("--drag-preview")) { UpdateLayout(); _circleEditor.ShowDragPresentationPreview(); }
+    }
+
     internal void PrepareDesignButtonEditor()
     {
         RefreshBindings(MouseControl.XButton1); OpenEditor();
@@ -28,10 +45,28 @@ public partial class MainWindow
         // Both fixture profiles now exist. Selecting / browsing / theming must be read-only.
         byte[] before = File.ReadAllBytes(_store.FilePath);
         Guid id = EditingProfile.Id;
-        CircleTab_Click(this, new RoutedEventArgs());
-        if (ButtonsContent.Visibility != Visibility.Collapsed || CircleSummary.Visibility != Visibility.Visible || EditingProfile.Id != id)
-            throw new InvalidOperationException("Circle tab changed the selected profile.");
+        CircleTab_Click(this, new RoutedEventArgs()); UpdateLayout();
+        if (CircleWorkspaceHost.Visibility != Visibility.Visible || DevicesWorkspace.Visibility != Visibility.Collapsed || EditingProfile.Id != id || _circleEditor is null)
+            throw new InvalidOperationException("Circle did not open in the central workspace for the selected mouse.");
+        _circleEditor.VerifyHostedSurface();
+        if (!TryCloseCircleEditor()) throw new InvalidOperationException("Unchanged Circle could not close.");
         MappingsNav_Click(this, new RoutedEventArgs());
+        var preferences = _workspacePreferences;
+        ToggleSidebar_Click(this, new RoutedEventArgs()); UpdateLayout();
+        if (SidebarColumn.Width.Value != 68 || (Visibility)Resources["SidebarLabelVisibility"] != Visibility.Collapsed)
+            throw new InvalidOperationException("The sidebar did not collapse to an icon rail.");
+        ToggleSidebar_Click(this, new RoutedEventArgs());
+        RememberInspectorWidth(490); UpdateLayout();
+        ApplyWorkspaceSizing();
+        if (InspectorColumn.Width.Value != 490) throw new InvalidOperationException("Layout refresh reset the dragged inspector width.");
+        var folder = Path.Combine(Path.GetDirectoryName(_store.FilePath)!, "layout-fixture");
+        _workspacePreferences.Save(folder);
+        if (WorkspacePreferences.Load(folder) != _workspacePreferences) throw new InvalidOperationException("Workspace layout did not survive reload.");
+        _workspacePreferences = preferences; ApplyWorkspaceSizing();
+        ShowButtonPositions(); UpdateLayout(); PlaceMarkers();
+        if (DeviceDetailPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Collapsed || DiagramStage.ActualWidth < 300)
+            throw new InvalidOperationException("Button positions did not open in the center.");
+        BackToGallery_Click(this, new RoutedEventArgs());
         foreach (string theme in new[] { "light", "dark" })
         {
             ThemeCombo.SelectedValue = theme;
@@ -50,8 +85,8 @@ public partial class MainWindow
         if (HeroMouse.RenderSize != size || DeviceCardsList.RenderSize != gallery)
             throw new InvalidOperationException("An action form resized the mouse gallery.");
         CloseEditor(); ThemeCombo.SelectedValue = original; ThemeManager.Apply(original);
-        if (MappingPage.ActualWidth < 300 || DevicesPage.ActualWidth < 400 || InspectorCircle.Children.Count < 9)
-            throw new InvalidOperationException("Inspector, gallery or Circle preview lost its usable layout.");
-        Console.WriteLine("PASS WPF design: persistent gallery + selected-device inspector, tabs, live light/dark reload, profile-byte preservation, stable artwork.");
+        if (MappingPage.ActualWidth < 300 || DevicesPage.ActualWidth < 340 || CloseBindingButton.Style == FindResource("Quiet"))
+            throw new InvalidOperationException("Inspector, gallery or explicit Close button lost its usable layout.");
+        Console.WriteLine("PASS WPF design: resizable inspector, collapsible navigation, central button positions and embedded Circle, scoped profiles, stable artwork, light/dark reload.");
     }
 }

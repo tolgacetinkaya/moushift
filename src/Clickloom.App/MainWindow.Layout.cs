@@ -20,18 +20,22 @@ public partial class MainWindow
     private void ApplyWorkspaceSizing()
     {
         double width = ActualWidth > 0 ? ActualWidth : Width, height = ActualHeight > 0 ? ActualHeight : Height;
-        SidebarColumn.Width = new GridLength(width < 1250 ? 156 : 190);
-        InspectorColumn.Width = new GridLength(width < 1250 ? 350 : 420);
-        double galleryWidth = width - SidebarColumn.Width.Value - InspectorColumn.Width.Value - 62;
+        bool collapsed = _workspacePreferences.SidebarCollapsed;
+        SidebarColumn.Width = new GridLength(collapsed ? 68 : 190);
+        Resources["SidebarLabelVisibility"] = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        Resources["SidebarIconMargin"] = collapsed ? new Thickness(0) : new Thickness(0, 0, 12, 0);
+        SidebarToggleIcon.Text = collapsed ? "\uE76C" : "\uE76B";
+        SidebarToggle.ToolTip = collapsed ? "Expand navigation" : "Collapse navigation";
+        InspectorColumn.Width = new GridLength(Math.Clamp(_workspacePreferences.InspectorWidth, 320, Math.Min(640, Math.Max(320, width - SidebarColumn.Width.Value - 396))));
+        double galleryWidth = width - SidebarColumn.Width.Value - InspectorColumn.Width.Value - 74;
         int visible = _deviceCards.Count >= 3 && galleryWidth >= 750 ? 3 : 2;
         Resources["DeviceTileWidth"] = Math.Clamp((galleryWidth - visible * 10) / visible, 218, 360);
         Resources["DeviceTileHeight"] = Math.Clamp(height - 365, 380, 640);
         // Action forms never determine the size of the artwork.
-        DiagramStage.Height = 280;
-        BindingsList.Height = Math.Min(224, _bindings.Count * 43 + 4);
+        DiagramStage.Height = Math.Clamp(height - 335, 300, 580);
+        BindingsList.Height = double.NaN;
         HeroMouse.MaxWidth = 400; HeroMouse.MaxHeight = 500;
         EditorPane.Padding = new Thickness(0, 18, 0, 0);
-        UpdateCircleSummaryVisibility();
         PlaceMarkers();
     }
     private void PlaceMarkers()
@@ -76,18 +80,7 @@ public partial class MainWindow
         ShowPage(page); ApplyWorkspaceSizing();
     }
     internal void FinishOffscreenWorkspaceLayout() { PlaceMarkers(); }
-    private void CircleTab_Click(object sender, RoutedEventArgs e)
-    {
-        CloseEditor(); ButtonsContent.Visibility = Visibility.Collapsed;
-        UpdateCircleSummaryVisibility();
-        SetInspectorTab(true);
-    }
-    private void UpdateCircleSummaryVisibility()
-    {
-        double height = ActualHeight > 0 ? ActualHeight : Height;
-        CircleSummary.Visibility = EditorPane.Visibility != Visibility.Visible && (height >= 850 || ButtonsContent.Visibility == Visibility.Collapsed)
-            ? Visibility.Visible : Visibility.Collapsed;
-    }
+    private void CircleTab_Click(object sender, RoutedEventArgs e) => EditRing_Click(sender, e);
     private void SetInspectorTab(bool circle)
     {
         foreach (var (tab, selected) in new[] { (MappingsNav, !circle), (RingNav, circle) })

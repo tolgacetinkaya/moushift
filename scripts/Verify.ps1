@@ -40,6 +40,18 @@ try {
     }
     dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-devices (Join-Path $clickloomRoot 'docs\ui-014\light-compact.png') --design-fixture --compact --theme=light
     if ($LASTEXITCODE -ne 0) { throw 'Compact gallery capture failed.' }
+    foreach ($workspaceTheme in @('light', 'dark')) {
+        foreach ($workspaceView in @('gallery', 'positions', 'circle')) {
+            $workspaceArgs = @('--render-devices', (Join-Path $clickloomRoot ('docs/ui-0142/' + $workspaceView + '-' + $workspaceTheme + '.png')), '--design-fixture', ('--theme=' + $workspaceTheme))
+            if ($workspaceView -eq 'gallery') { $workspaceArgs += '--three-devices' }
+            if ($workspaceView -eq 'positions') { $workspaceArgs += @('--edit-positions', '--edit-button') }
+            if ($workspaceView -eq 'circle') { $workspaceArgs += @('--edit-circle', '--folder') }
+            dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll @workspaceArgs
+            if ($LASTEXITCODE -ne 0) { throw 'Integrated workspace capture failed.' }
+        }
+    }
+    dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-devices (Join-Path $clickloomRoot 'docs/ui-0142/compact-dark.png') --design-fixture --compact --collapsed-nav --edit-circle --theme=dark
+    if ($LASTEXITCODE -ne 0) { throw 'Collapsed compact Circle workspace failed.' }
     if ($InteractiveUi) {
         dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-preview (Join-Path $clickloomRoot 'docs\clickloom-preview.png') --verify-ui --theme=light
         if ($LASTEXITCODE -ne 0) { throw 'WPF editor verification failed.' }

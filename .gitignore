@@ -45,4 +45,14 @@ device-input.json
 !/docs/ui-014/light-dark.png
 !/docs/ui-014/light-compact.png
 device-support.json
+workspace.json
+!/docs/ui-0142/
+/docs/ui-0142/*
+!/docs/ui-0142/gallery-light.png
+!/docs/ui-0142/gallery-dark.png
+!/docs/ui-0142/positions-light.png
+!/docs/ui-0142/positions-dark.png
+!/docs/ui-0142/circle-light.png
+!/docs/ui-0142/circle-dark.png
+!/docs/ui-0142/compact-dark.png
 *.log

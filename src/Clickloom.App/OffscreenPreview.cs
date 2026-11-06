@@ -54,6 +54,7 @@ internal static class OffscreenPreview
             if (args.Contains("--verify-device-ui")) main.VerifyDeviceProfileEditor();
             if (args.Contains("--design-fixture")) main.PrepareDesignFixture();
             else if (workspace >= 0) main.PrepareOffscreenWorkspace(); else main.PrepareOffscreenPage(devices >= 0 ? "devices" : settings >= 0 ? "appearance" : "setup");
+            if (args.Contains("--three-devices")) main.AddThirdDesignDevice();
             if (args.Contains("--edit-button")) main.PrepareDesignButtonEditor();
             window = main;
         }
@@ -68,6 +69,7 @@ internal static class OffscreenPreview
         {
             mainWindow.FinishOffscreenWorkspaceLayout(); host.UpdateLayout();
             if (args.Contains("--verify-design")) { mainWindow.VerifyDesignWorkspace(); host.UpdateLayout(); }
+            mainWindow.PrepareWorkspaceCapture(args); host.UpdateLayout();
         }
         // Flush resource/binding invalidations after a live theme switch on the detached tree.
         var frame = new System.Windows.Threading.DispatcherFrame();

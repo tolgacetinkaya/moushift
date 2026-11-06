@@ -6,15 +6,15 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 
 ## What works
 
-- Side-by-side mouse gallery with a persistent inspector for the selected mouse and independent device/application profiles.
-- Click Circle: searchable action library, drag/drop, folders, shortcut parameters and undo/redo.
+- Side-by-side mouse gallery with a resizable inspector, collapsible icon navigation and independent device/application profiles.
+- Click Circle in the main workspace: centered Circle with a searchable, draggable action library on the right, folders, shortcut parameters and undo/redo.
 - Generic HID descriptor discovery without a manufacturer/model allowlist or vendor commands.
 - Teach a button: choose a point on the mouse drawing, explicitly listen, press the same input twice, name it and save locally.
 - Learned input identities and normalized drawing positions persist per connection. Learning/repositioning does not change the device firmware or vendor configuration.
 - Light (silver / wine) and dark (charcoal / muted rose) themes, switchable from the title bar or Settings.
 - Atomic local settings writes with a last-good backup.
 
-![Device gallery and selected-mouse inspector — illustrative test data](docs/ui-014/light-gallery.png)
+![Device gallery and resizable selected-mouse inspector — illustrative test data](docs/ui-0142/gallery-light.png)
 
 ## Current boundaries
 
@@ -37,7 +37,7 @@ The app starts paused. With connected Raw Input sources it offers **Enable Circl
 Requires Windows 10/11 x64. The release ZIP includes the .NET and Windows Desktop runtimes: extract the complete folder and run `Moushift.exe`, without installing .NET separately. Keep all extracted files together. Source development requires the .NET 10 SDK; use `Start-Moushift.cmd` after a local build.
 
 1. Select your mouse connection in **Devices**.
-2. Open **Button positions → Teach a button…** in that mouse's inspector.
+2. Click the mouse drawing to open its button positions in the center, then choose **Teach a button…**.
 3. Click its position on the drawing.
 4. Click **Listen for button**, release held buttons, and press the target twice.
 5. Review the detected identity/name and choose **Save button**.
@@ -66,7 +66,7 @@ Real device presses, OLE drag/drop smoothness, wireless receivers and live remap
 
 ## Data and privacy
 
-Moushift was previously named Clickloom. To preserve existing assignments, profiles and themes without copying or resetting them, settings remain in `%LOCALAPPDATA%/Clickloom/profiles.json`; appearance is separate. Development/tests use `CLICKLOOM_DATA_DIR`. The learning listener is temporary and restricted to interfaces associated with the selected connection. Ordinary keyboard typing is ignored; the dedicated keyboard fallback only accepts F13–F24. There is no telemetry or automatic upload of reports/profiles.
+Moushift was previously named Clickloom. To preserve existing assignments, profiles and themes without copying or resetting them, settings remain in `%LOCALAPPDATA%/Clickloom/profiles.json`; appearance is separate. Navigation collapse and inspector width are stored separately in `workspace.json`. Development/tests use `CLICKLOOM_DATA_DIR`. The learning listener is temporary and restricted to interfaces associated with the selected connection. Ordinary keyboard typing is ignored; the dedicated keyboard fallback only accepts F13–F24. There is no telemetry or automatic upload of reports/profiles.
 
 Do not attach personal profiles, device serials, raw device paths or unreviewed input captures to public issues. See [contributing](CONTRIBUTING.md), [learning design](docs/HID_LEARNING.md) and [known limits](docs/KNOWN_LIMITS.md).
 
@@ -74,4 +74,4 @@ Do not attach personal profiles, device serials, raw device paths or unreviewed 
 
 Issue forms cover bugs and undetected inputs. Pull requests run Windows build/tests/offscreen previews. Release tags and `release/v<version>-preview.<number>` branches run verification and produce a **draft prerelease**, including a portable ZIP and SHA-256 checksum; publishing is a separate maintainer action. The workflow also supports a manual preview-tag input. Published releases are never overwritten by the draft helper.
 
-See [release notes](docs/releases/v0.14.1-preview.md). License: [MIT](LICENSE).
+See [release notes](docs/releases/v0.14.2-preview.md). License: [MIT](LICENSE).

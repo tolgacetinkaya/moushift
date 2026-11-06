@@ -58,6 +58,7 @@ public partial class MainWindow : Window
         string dataRoot = Environment.GetEnvironmentVariable("CLICKLOOM_DATA_DIR")
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Clickloom");
         _store = new SettingsStore(Path.Combine(dataRoot, "profiles.json"));
+        _workspacePreferences = WorkspacePreferences.Load(dataRoot);
         var loaded = _store.Load();
         _settings = loaded.Settings;
         _editingProfileId = _settings.ActiveProfileId;
@@ -348,7 +349,6 @@ public partial class MainWindow : Window
             ? b.VirtualKey == auxiliaryKey : b.Mouse == select && b.VirtualKey is null) ?? _bindings[3];
         _loading = prior;
         LoadSelectedBinding();
-        InspectorCircle.SetSlots(EditingProfile.RingSlots);
         ApplyWorkspaceSizing();
         if (IsInitialized) PlaceMarkers();
         if (IsLoaded && SourceExpander.IsExpanded)
@@ -398,6 +398,7 @@ public partial class MainWindow : Window
         TextPanel.Visibility = choice.Kind == ActionKind.Text ? Visibility.Visible : Visibility.Collapsed;
         LaunchPanel.Visibility = choice.Kind == ActionKind.LaunchApplication ? Visibility.Visible : Visibility.Collapsed;
         RingPanel.Visibility = choice.Kind == ActionKind.Ring ? Visibility.Visible : Visibility.Collapsed;
+        ActionDescriptionBox.Visibility = choice.Kind == ActionKind.Ring ? Visibility.Visible : Visibility.Collapsed;
         ActionDescription.Text = choice.Kind switch
         {
             ActionKind.Passthrough => "Keeps the button's normal behavior.",
@@ -406,8 +407,8 @@ public partial class MainWindow : Window
             ActionKind.MouseButton => "Supports holding and dragging.",
             ActionKind.Text => "Types text into the focused application.",
             ActionKind.LaunchApplication => "Opens your selected local application.",
-            ActionKind.Ring => _service?.HasResolvedDeviceRoutes == true ? "Opens the Click Circle beside your pointer."
-                : "Driverless: opens this mouse's Click Circle. Its original click also reaches Windows; click an action to select it.",
+            ActionKind.Ring => EditingProfile.DeviceKey is { } key && _service?.CanRouteDevice(key) == true ? "Opens the Click Circle beside your pointer."
+                : "Driverless mode keeps this button’s original click active in other applications. Click Circle does not replace it. Exclusive input support is required to suppress it for this mouse.",
             _ => ""
         };
     }
@@ -664,12 +665,14 @@ public partial class MainWindow : Window
             InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? _service.DriverlessCircleMode ? "Driverless Circle · Original input retained" : "Per-mouse assignments enabled" : "Paused";
     }
 
-    private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; UpdateCircleSummaryVisibility(); SetInspectorTab(false); }
+    private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
     private void DevicesNav_Click(object sender, RoutedEventArgs e) { ShowPage("devices"); RefreshDevices(); }
     private void AboutNav_Click(object sender, RoutedEventArgs e) => ShowPage("about");
     private void ShowPage(string page)
     {
         if (page == "mappings" && _selectedDevice?.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse to edit its separate profile."; return; }
+        if (!TryCloseCircleEditor()) return;
+        DeviceDetailPage.Visibility = Visibility.Collapsed;
         bool workspace = page is "devices" or "mappings";
         DevicesWorkspace.Visibility = workspace ? Visibility.Visible : Visibility.Collapsed;
         ProfileToolbar.Visibility = workspace ? Visibility.Visible : Visibility.Collapsed;
@@ -733,6 +736,7 @@ public partial class MainWindow : Window
     {
         if (sender is not System.Windows.Controls.Button { Tag: DeviceCard device }) return;
         if (device.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse. Previous shared assignments are kept for import."; return; }
+        if (!TryCloseCircleEditor()) return;
         _selectedDevice = device;
         _editingSavedProfile = false;
         var profile = _settings.Profiles.FirstOrDefault(p => p.DeviceKey == device.DeviceKey && p.ApplicationPath is null);
@@ -756,8 +760,8 @@ public partial class MainWindow : Window
         LoadSelectedBinding();
         OpenEditor();
     }
-    private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; CircleSummary.Visibility = Visibility.Collapsed; CircleFooter.Visibility = Visibility.Collapsed; ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
-    private void CloseEditor() { EditorPane.Visibility = Visibility.Collapsed; SourceExpander.Visibility = Visibility.Visible; UpdateCircleSummaryVisibility(); CircleFooter.Visibility = Visibility.Visible; }
+    private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
+    private void CloseEditor() { EditorPane.Visibility = Visibility.Collapsed; SourceExpander.Visibility = Visibility.Visible; }
     private void CloseEditor_Click(object sender, RoutedEventArgs e) => CloseEditor();
 
     private void DeviceScope_Changed(object sender, RoutedEventArgs e)
@@ -785,10 +789,7 @@ public partial class MainWindow : Window
     private void EditRing_Click(object sender, RoutedEventArgs e)
     {
         if (EditingProfile.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse for its Click Circle."; return; }
-        var editor = new RingEditorWindow(_settings, _editingProfileId, _service, _selectedDevice?.Name ?? EditingProfile.DeviceName) { Owner = this };
-        if (editor.ShowDialog() != true) return;
-        var next = _settings.DeepClone(); editor.ApplyTo(next);
-        if (CommitSettings(next, "Click Circle saved for this mouse.")) { PopulateProfiles(); RefreshBindings(); }
+        OpenCircleWorkspace();
     }
     private void PreviewRing_Click(object sender, RoutedEventArgs e) { _service?.DismissRing(); OpenRing(EditingProfile.RingSlots, null); }
     private void OpenRing(IReadOnlyList<RingSlot> slots, RingRequest? request)
@@ -872,11 +873,12 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_exiting) return;
-        if (_previewOnly) { _exiting = true; DisposeRuntime(); System.Windows.Application.Current.Shutdown(); return; }
+        if (_previewOnly) { ReleaseCircleWorkspace(); _exiting = true; DisposeRuntime(); System.Windows.Application.Current.Shutdown(); return; }
+        if (!TryCloseCircleEditor()) { e.Cancel = true; return; }
         e.Cancel = true; Hide();
         _tray?.ShowBalloonTip(2500, "Moushift is still running", "Choose Quit in the tray menu to close Moushift completely.", System.Windows.Forms.ToolTipIcon.Info);
     }
-    private void ExitApp() { _exiting = true; DisposeRuntime(); Close(); System.Windows.Application.Current.Shutdown(); }
+    private void ExitApp() { if (!TryCloseCircleEditor()) return; _exiting = true; DisposeRuntime(); Close(); System.Windows.Application.Current.Shutdown(); }
     private void DisposeRuntime()
     {
         if (_disposed) return;
