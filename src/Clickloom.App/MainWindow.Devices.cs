@@ -65,7 +65,13 @@ public partial class MainWindow
             else if (current.Name != d.Name || current.Detail != d.Status) target[target.IndexOf(current)] = new(d.Key, d.Name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key);
             else if (target.IndexOf(current) != i) target.Move(target.IndexOf(current), i);
         }
+        foreach (var row in target) row.BatteryPercent = rows.First(d => d.Key == row.Key).BatteryPercent;
         foreach (var row in target) { row.IsSelected = row.DeviceKey is not null && row.DeviceKey == _selectedDevice?.DeviceKey; row.Routing = row.DeviceKey is null ? "Additional interface" : _service?.CanRouteDevice(row.Key) == true ? "Separate input ready" : _service?.CanTriggerCircleForDevice(row.Key) == true ? "Driverless Circle ready" : "Waiting for input"; }
+        if (_selectedDevice?.DeviceKey is { } selected)
+        {
+            var current = _deviceCards.FirstOrDefault(c => c.DeviceKey == selected);
+            if (current is not null) { _selectedDevice = current; DetailBatteryInfo.Content = current; }
+        }
     }
     private void ApplyConnectionInventory(IReadOnlyList<MouseConnection> connections)
     {

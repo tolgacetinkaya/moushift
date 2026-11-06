@@ -26,13 +26,17 @@ public partial class MainWindow
         Resources["SidebarIconMargin"] = collapsed ? new Thickness(0) : new Thickness(0, 0, 12, 0);
         SidebarToggleIcon.Text = collapsed ? "\uE76C" : "\uE76B";
         SidebarToggle.ToolTip = collapsed ? "Expand navigation" : "Collapse navigation";
-        InspectorColumn.Width = new GridLength(Math.Clamp(_workspacePreferences.InspectorWidth, 320, Math.Min(640, Math.Max(320, width - SidebarColumn.Width.Value - 396))));
+        bool detail = DevicesWorkspace.Visibility == Visibility.Visible && DeviceDetailPage.Visibility == Visibility.Visible && _selectedDevice?.DeviceKey is not null;
+        DeviceInspector.Visibility = InspectorSplitter.Visibility = detail ? Visibility.Visible : Visibility.Collapsed;
+        InspectorColumn.MinWidth = detail ? 320 : 0;
+        InspectorColumn.Width = detail ? new GridLength(Math.Clamp(_workspacePreferences.InspectorWidth, 320, Math.Min(640, Math.Max(320, width - SidebarColumn.Width.Value - 396)))) : new GridLength(0);
+        InspectorSplitterColumn.Width = new GridLength(detail ? 6 : 0);
         double galleryWidth = width - SidebarColumn.Width.Value - InspectorColumn.Width.Value - 74;
         int visible = _deviceCards.Count >= 3 && galleryWidth >= 750 ? 3 : 2;
         Resources["DeviceTileWidth"] = Math.Clamp((galleryWidth - visible * 10) / visible, 218, 360);
         Resources["DeviceTileHeight"] = Math.Clamp(height - 365, 380, 640);
         // Action forms never determine the size of the artwork.
-        DiagramStage.Height = Math.Clamp(height - 335, 300, 580);
+        DiagramStage.Height = Math.Clamp(height - 370, 300, 580);
         BindingsList.Height = double.NaN;
         HeroMouse.MaxWidth = 400; HeroMouse.MaxHeight = 500;
         EditorPane.Padding = new Thickness(0, 18, 0, 0);
@@ -63,6 +67,7 @@ public partial class MainWindow
         _deviceCards.Clear();
         var a = new DeviceCard("preview:corsair", "Corsair Dark Core", "Corsair", "USB receiver connected · mouse availability unconfirmed", ThemeManager.Brush("Accent"), "preview:corsair");
         var b = new DeviceCard("preview:logi", "MX Master 4", "Logitech", "Bluetooth interface connected · mouse availability unconfirmed", ThemeManager.Brush("Accent"), "preview:logi");
+        b.BatteryPercent = 60; // Presentation-only value; never a live hardware reading.
         _deviceCards.Add(a); _deviceCards.Add(b);
         DeviceCard_Click(new Button { Tag = a }, new RoutedEventArgs());
         EditingProfile.Bindings.Single(x => x.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };

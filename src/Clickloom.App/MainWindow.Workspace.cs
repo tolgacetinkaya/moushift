@@ -2,7 +2,6 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Input;
 
 namespace Clickloom.App;
 
@@ -38,14 +37,6 @@ public partial class MainWindow
         ApplyWorkspaceSizing(); SaveWorkspacePreferences();
     }
 
-    private void DeviceArtwork_Click(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is not FrameworkElement { Tag: DeviceCard card }) return;
-        e.Handled = true;
-        DeviceCard_Click(new Button { Tag = card }, new RoutedEventArgs());
-        if (_selectedDevice?.DeviceKey == card.DeviceKey && _circleEditor is null) ShowButtonPositions();
-    }
-
     private void ShowButtonPositions()
     {
         if (_selectedDevice?.DeviceKey is null) return;
@@ -57,9 +48,7 @@ public partial class MainWindow
 
     private void BackToGallery_Click(object sender, RoutedEventArgs e)
     {
-        DeviceDetailPage.Visibility = Visibility.Collapsed;
-        DevicesPage.Visibility = Visibility.Visible;
-        CloseEditor(); ApplyWorkspaceSizing();
+        ShowPage("devices");
     }
 
     private void OpenCircleWorkspace()

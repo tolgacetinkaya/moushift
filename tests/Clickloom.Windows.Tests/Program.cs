@@ -14,7 +14,7 @@ if (args.Contains("--hid-discovery"))
 if (args.Contains("--connections"))
 {
     foreach (var device in MouseConnectionCatalog.Enumerate())
-        Console.WriteLine($"{device.Name} | {device.Manufacturer} | {device.Transport} | {device.Status} | {device.DevicePaths.Length} interfaces");
+        Console.WriteLine($"{device.Name} | {device.Manufacturer} | {device.Transport} | {device.Status} | {device.DevicePaths.Length} interfaces | Battery: {(device.BatteryPercent is { } value ? value + "%" : "unavailable")}");
     return 0;
 }
 
@@ -66,6 +66,7 @@ var tests = new (string Name, Action Run)[]
     ("keyboard learning excludes ordinary typing", KeyboardLearningPrivacy),
     ("driver routes require one physical match and reject identical mouse ambiguity", PhysicalDeviceRoutes),
     ("connection inventory groups interfaces without claiming mouse power", ConnectionGrouping),
+    ("Windows battery percentages validate ranges and never cross device identities", BatteryLevels),
     ("native INPUT ABI and event encoding", NativeLayout),
     ("service starts disarmed and cannot arm without hooks", DisarmedService),
     ("invalid settings cannot enable or reach native polling", InvalidSettings),
@@ -223,6 +224,21 @@ static void RawCircleHookOrdering()
     Require(router.Press(settings, "corsair:path", MouseControl.MiddleButton, true, true, null)?.DeviceKey == "corsair", "Circle could not reopen after closing.");
     Require(RingActionSelection.ForwardOriginalButton(true, MouseControl.XButton1)
         && !RingActionSelection.ForwardOriginalButton(false, MouseControl.MiddleButton), "Driverless fix changed exclusive behavior or swallowed another original button.");
+}
+
+static void BatteryLevels()
+{
+    if (MouseConnectionCatalog.DecodeBattery(3, [0]) != 0 || MouseConnectionCatalog.DecodeBattery(3, [100]) != 100
+        || MouseConnectionCatalog.DecodeBattery(3, [101]) is not null || MouseConnectionCatalog.DecodeBattery(7, [60]) is not null
+        || MouseConnectionCatalog.DecodeBattery(3, []) is not null || MouseConnectionCatalog.DecodeBattery(3, [60, 0]) is not null)
+        throw new Exception("Unknown, malformed or differently typed battery values became a percentage.");
+    var inputs = new[] { new MouseDeviceInfo("A", "a:1", "", "", 5), new MouseDeviceInfo("A", "a:2", "", "", 5), new MouseDeviceInfo("B", "b:1", "", "", 5) };
+    var known = MouseConnectionCatalog.Build(inputs, d => d.DevicePath.StartsWith("a:") ? new("a", "A", "Bluetooth", false, 60) : new("b", "B", "USB", false));
+    if (known.Single(d => d.Key == "a").BatteryPercent != 60 || known.Single(d => d.Key == "b").BatteryPercent is not null)
+        throw new Exception("A battery reading was lost or copied to a different mouse.");
+    var conflict = MouseConnectionCatalog.Build(inputs, d => d.DevicePath switch
+    { "a:1" => new("a", "A", "Bluetooth", false, 60), "a:2" => new("a", "A", "Bluetooth", false, 70), _ => new("b", "B", "USB", false, 255) });
+    if (conflict.Any(d => d.BatteryPercent is not null)) throw new Exception("Conflicting or invalid readings were displayed as known battery levels.");
 }
 
 static void ConnectionGrouping()

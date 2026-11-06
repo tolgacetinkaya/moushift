@@ -6,7 +6,8 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 
 ## What works
 
-- Side-by-side mouse gallery with a resizable inspector, collapsible icon navigation and independent device/application profiles.
+- Side-by-side mouse gallery. Select any card to open that mouse alone in the center with its resizable settings inspector on the right. Navigation collapses to icons; profiles stay independent per mouse/application.
+- Battery badges on the gallery and selected mouse, when Windows exposes a percentage. Missing readings stay explicitly unavailable; no proprietary receiver protocol is used.
 - Click Circle in the main workspace: centered Circle with a searchable, draggable action library on the right, folders, shortcut parameters and undo/redo.
 - Generic HID descriptor discovery without a manufacturer/model allowlist or vendor commands.
 - Teach a button: choose a point on the mouse drawing, explicitly listen, press the same input twice, name it and save locally.
@@ -37,7 +38,7 @@ The app starts paused. With connected Raw Input sources it offers **Enable Circl
 Requires Windows 10/11 x64. The release ZIP includes the .NET and Windows Desktop runtimes: extract the complete folder and run `Moushift.exe`, without installing .NET separately. Keep all extracted files together. Source development requires the .NET 10 SDK; use `Start-Moushift.cmd` after a local build.
 
 1. Select your mouse connection in **Devices**.
-2. Click the mouse drawing to open its button positions in the center, then choose **Teach a button…**.
+2. The selected mouse's button positions open in the center; choose **Teach a button…**.
 3. Click its position on the drawing.
 4. Click **Listen for button**, release held buttons, and press the target twice.
 5. Review the detected identity/name and choose **Save button**.
@@ -74,4 +75,4 @@ Do not attach personal profiles, device serials, raw device paths or unreviewed 
 
 Issue forms cover bugs and undetected inputs. Pull requests run Windows build/tests/offscreen previews. Release tags and `release/v<version>-preview.<number>` branches run verification and produce a **draft prerelease**, including a portable ZIP and SHA-256 checksum; publishing is a separate maintainer action. The workflow also supports a manual preview-tag input. Published releases are never overwritten by the draft helper.
 
-See [release notes](docs/releases/v0.14.2-preview.md). License: [MIT](LICENSE).
+See [release notes](docs/releases/v0.14.3-preview.md). License: [MIT](LICENSE).

@@ -22,6 +22,7 @@ public partial class MainWindow
         UpdateLayout(); PlaceMarkers();
         if (_circleEditor is not null && args.Contains("--folder")) _circleEditor.ShowFolderPreview();
         if (_circleEditor is not null && args.Contains("--drag-preview")) { UpdateLayout(); _circleEditor.ShowDragPresentationPreview(); }
+        if (args.Contains("--three-devices")) BackToGallery_Click(this, new RoutedEventArgs());
     }
 
     internal void PrepareDesignButtonEditor()
@@ -36,11 +37,18 @@ public partial class MainWindow
         if (!_previewOnly || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CLICKLOOM_DATA_DIR")))
             throw new InvalidOperationException("Design checks require isolated data.");
         string original = ThemeManager.Current;
-        var gallery = DeviceCardsList.RenderSize;
         var a = _deviceCards[0]; var b = _deviceCards[1];
+        BackToGallery_Click(this, new RoutedEventArgs()); UpdateLayout();
+        if (_selectedDevice is not null || DeviceInspector.Visibility != Visibility.Collapsed || InspectorSplitter.Visibility != Visibility.Collapsed
+            || InspectorColumn.ActualWidth != 0 || InspectorSplitterColumn.ActualWidth != 0 || DevicesPage.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("The gallery reserved a settings panel without a selected mouse.");
         DeviceCard_Click(new Button { Tag = b }, new RoutedEventArgs());
-        if (DeviceHeading.Text != b.Name || EditingProfile.DeviceKey != b.DeviceKey || DevicesPage.Visibility != Visibility.Visible || MappingPage.Visibility != Visibility.Visible)
-            throw new InvalidOperationException("Selection did not retain the gallery beside this mouse's inspector.");
+        UpdateLayout();
+        if (DeviceHeading.Text != b.Name || DetailHeading.Text != b.Name || EditingProfile.DeviceKey != b.DeviceKey || DevicesPage.Visibility != Visibility.Collapsed
+            || DeviceDetailPage.Visibility != Visibility.Visible || MappingPage.Visibility != Visibility.Visible || DeviceInspector.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("A card did not open only its mouse in the center with its settings on the right.");
+        if (!ReferenceEquals(DetailBatteryInfo.Content, b) || b.BatteryLabel != "60%" || a.BatteryLabel != "Battery unavailable")
+            throw new InvalidOperationException("Battery information did not follow the selected device or invented a missing percentage.");
         DeviceCard_Click(new Button { Tag = a }, new RoutedEventArgs());
         // Both fixture profiles now exist. Selecting / browsing / theming must be read-only.
         byte[] before = File.ReadAllBytes(_store.FilePath);
@@ -67,6 +75,9 @@ public partial class MainWindow
         if (DeviceDetailPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Collapsed || DiagramStage.ActualWidth < 300)
             throw new InvalidOperationException("Button positions did not open in the center.");
         BackToGallery_Click(this, new RoutedEventArgs());
+        UpdateLayout();
+        if (_selectedDevice is not null || DeviceInspector.Visibility != Visibility.Collapsed || InspectorColumn.ActualWidth != 0)
+            throw new InvalidOperationException("Returning to All mice retained the selected mouse inspector.");
         foreach (string theme in new[] { "light", "dark" })
         {
             ThemeCombo.SelectedValue = theme;
@@ -82,11 +93,11 @@ public partial class MainWindow
         RefreshBindings(MouseControl.XButton1); OpenEditor(); UpdateLayout();
         var size = HeroMouse.RenderSize;
         ActionCombo.SelectedValue = ActionKind.Shortcut; UpdateLayout();
-        if (HeroMouse.RenderSize != size || DeviceCardsList.RenderSize != gallery)
-            throw new InvalidOperationException("An action form resized the mouse gallery.");
+        if (HeroMouse.RenderSize != size || DevicesPage.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("An action form resized the selected mouse or reopened the gallery.");
         CloseEditor(); ThemeCombo.SelectedValue = original; ThemeManager.Apply(original);
-        if (MappingPage.ActualWidth < 300 || DevicesPage.ActualWidth < 340 || CloseBindingButton.Style == FindResource("Quiet"))
+        if (MappingPage.ActualWidth < 300 || DeviceDetailPage.ActualWidth < 340 || CloseBindingButton.Style == FindResource("Quiet"))
             throw new InvalidOperationException("Inspector, gallery or explicit Close button lost its usable layout.");
-        Console.WriteLine("PASS WPF design: resizable inspector, collapsible navigation, central button positions and embedded Circle, scoped profiles, stable artwork, light/dark reload.");
+        Console.WriteLine("PASS WPF design: gallery without inspector, single-click selected mouse detail, back navigation, resizable inspector, embedded Circle, scoped profiles and stable artwork.");
     }
 }

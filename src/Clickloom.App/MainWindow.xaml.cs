@@ -672,14 +672,20 @@ public partial class MainWindow : Window
     {
         if (page == "mappings" && _selectedDevice?.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse to edit its separate profile."; return; }
         if (!TryCloseCircleEditor()) return;
-        DeviceDetailPage.Visibility = Visibility.Collapsed;
+        if (page == "devices")
+        {
+            _selectedDevice = null; _editingSavedProfile = false;
+            foreach (var card in _deviceCards) card.IsSelected = false;
+        }
         bool workspace = page is "devices" or "mappings";
+        bool detail = page == "mappings" && _selectedDevice?.DeviceKey is not null;
+        DeviceDetailPage.Visibility = detail ? Visibility.Visible : Visibility.Collapsed;
         DevicesWorkspace.Visibility = workspace ? Visibility.Visible : Visibility.Collapsed;
         ProfileToolbar.Visibility = workspace ? Visibility.Visible : Visibility.Collapsed;
         SetupPage.Visibility = page == "setup" ? Visibility.Visible : Visibility.Collapsed;
-        MappingPage.Visibility = workspace && _selectedDevice?.DeviceKey is not null ? Visibility.Visible : Visibility.Collapsed;
+        MappingPage.Visibility = detail ? Visibility.Visible : Visibility.Collapsed;
         InspectorEmpty.Visibility = MappingPage.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-        DevicesPage.Visibility = workspace ? Visibility.Visible : Visibility.Collapsed;
+        DevicesPage.Visibility = page == "devices" ? Visibility.Visible : Visibility.Collapsed;
         AboutPage.Visibility = page == "about" ? Visibility.Visible : Visibility.Collapsed;
         ProfilesPage.Visibility = page == "profiles" ? Visibility.Visible : Visibility.Collapsed;
         AppearancePage.Visibility = page == "appearance" ? Visibility.Visible : Visibility.Collapsed;
@@ -687,6 +693,8 @@ public partial class MainWindow : Window
         {
             _selectedDevice ??= GlobalDeviceCard();
             DeviceHeading.Text = _selectedDevice.Name;
+            DetailHeading.Text = _selectedDevice.Name;
+            DetailBatteryInfo.Content = _selectedDevice;
             HeroMouse.SetResourceReference(MouseIllustration.AccentProperty, "Accent");
             DeviceScopeCheck.IsEnabled = _selectedDevice.DeviceKey is not null && (_service?.HasDeviceRouting == true || _service?.CanTriggerCircleForDevice(_selectedDevice.DeviceKey) == true);
             DeviceScopeHint.Text = _service?.CanRouteDevice(_selectedDevice.Key) == true ? "Actions apply only to this mouse." : "Your settings are saved for this mouse. Complete device setup to activate.";
@@ -705,6 +713,7 @@ public partial class MainWindow : Window
         }
         PageTitle.Text = page switch { "devices" => "Devices", "about" => "Help", "profiles" => "Profiles", "appearance" => "Settings", "setup" => "Input support", _ => "Customize" };
         if (workspace) SetInspectorTab(ButtonsContent.Visibility == Visibility.Collapsed);
+        ApplyWorkspaceSizing();
     }
     private void RefreshDevices_Click(object sender, RoutedEventArgs e) => RefreshDevices();
     private void RefreshDevices()
@@ -907,6 +916,22 @@ public partial class MainWindow : Window
     private sealed record DeviceCard(string Key, string Name, string Manufacturer, string Detail, Brush Accent, string? DeviceKey = null) : INotifyPropertyChanged
     {
         public bool CanEdit => DeviceKey is not null;
+        private int? _batteryPercent;
+        public int? BatteryPercent
+        {
+            get => _batteryPercent;
+            set
+            {
+                var next = value is >= 0 and <= 100 ? value : null;
+                if (_batteryPercent == next) return; _batteryPercent = next;
+                foreach (string name in new[] { nameof(BatteryPercent), nameof(BatteryLabel), nameof(BatteryFillWidth), nameof(BatteryDescription) }) PropertyChanged?.Invoke(this, new(name));
+            }
+        }
+        public string BatteryLabel => BatteryPercent is { } value ? value + "%" : "Battery unavailable";
+        public double BatteryFillWidth => (BatteryPercent ?? 0) * .22;
+        public string BatteryDescription => BatteryPercent is not null
+            ? "Battery level reported by Windows; it may be cached and does not confirm mouse power."
+            : "This connection does not expose a battery percentage to Windows. No manufacturer protocol is used.";
         public string ConnectionLabel => Detail.Contains("receiver", StringComparison.OrdinalIgnoreCase) ? "Receiver connected" : "Windows connection";
         private string _activity = "No input observed yet";
         public string Activity { get => _activity; set { if (_activity == value) return; _activity = value; PropertyChanged?.Invoke(this, new(nameof(Activity))); } }
