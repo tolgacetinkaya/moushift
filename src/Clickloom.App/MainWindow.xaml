@@ -71,8 +71,10 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="13">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Border Background="{DynamicResource Panel}" CornerRadius="13">
+              <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="13">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
             </Border>
           </ControlTemplate>
         </Setter.Value>

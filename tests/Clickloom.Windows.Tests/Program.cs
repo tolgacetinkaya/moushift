@@ -149,6 +149,10 @@ static void RawCircleHorizontalWheel()
     Require(router.Wheel(settings, "path", 120, false, null, 1400) is null, "Paused input triggered.");
     Require(router.Wheel(settings, "path", 120, true, null, 1410) is null, "Enable mid-gesture triggered.");
     Require(router.Wheel(settings, "path", 120, true, null, 1800) is not null, "Fresh tilt did not reopen.");
+    router.Update([connection, connection with { Key = "b", DevicePaths = ["other"] }, connection with { Key = "c", DevicePaths = ["third"] }]);
+    Require(router.Wheel(settings, "path", 120, true, null, 1810) is null, "Unrelated device arrival reset held tilt.");
+    router.Update([connection]);
+    Require(router.Wheel(settings, "path", 120, true, null, 1820) is null, "Unrelated device removal reset held tilt.");
     router.Update([]);
     Require(router.Wheel(settings, "path", 120, true, null, 2200) is null, "Removed source triggered.");
     router.Update([connection]);

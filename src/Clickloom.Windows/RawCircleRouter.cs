@@ -21,8 +21,11 @@ internal sealed class RawCircleRouter
             .ToDictionary(g => g.Key, g => g.First().Key, StringComparer.OrdinalIgnoreCase);
         bool changed = _devices.Count != next.Count || _devices.Any(p => !next.TryGetValue(p.Key, out var key) || key != p.Value);
         _held.RemoveWhere(p => !next.TryGetValue(p.Path, out var key) || !_devices.TryGetValue(p.Path, out var previous) || key != previous);
+        // Preserve held tilt bursts when a different mouse arrives or leaves.
+        foreach (string path in _wheels.Keys.Where(path => !next.TryGetValue(path, out var key)
+            || !_devices.TryGetValue(path, out var previous) || key != previous).ToArray())
+            _wheels.Remove(path);
         _devices = next;
-        if (changed) _wheels.Clear();
         return changed;
     }
 
