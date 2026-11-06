@@ -8,9 +8,9 @@ using Clickloom.Windows;
 namespace Clickloom.App;
 
 /// <summary>Pick a drawing position, explicitly listen, confirm two presses, then save a detached control.</summary>
-internal sealed class HidLearningWindow : Window
+internal sealed partial class HidLearningWindow : Window
 {
-    private readonly MouseConnection _connection;
+    private MouseConnection _connection;
     private readonly Func<IReadOnlyList<HidEndpoint>, Action<ObservedControl>, Action<string>, IDisposable>? _begin;
     private readonly List<LearnedControl> _existing;
     private readonly MouseIllustration _drawing = new() { Width = 320, Height = 460 };
@@ -31,7 +31,7 @@ internal sealed class HidLearningWindow : Window
     private Guid _id = Guid.NewGuid();
     private DateTimeOffset _observedAt;
     private double _x, _y;
-    private bool _position, _closed;
+    private bool _position, _closed, _discovering, _discoveryStarted, _rescanPending, _connected = true;
     private long _expires;
     internal LearnedControl? Result { get; private set; }
     public HidLearningWindow(MouseConnection connection, IEnumerable<LearnedControl> existing,
@@ -44,18 +44,23 @@ internal sealed class HidLearningWindow : Window
         header.Children.Add(T("Teach a button", 26)); header.Children.Add(T(connection.Name + " · This connection only", 13, "Muted"));
         DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
         var footer = new DockPanel { Margin = new(0, 18, 0, 0) }; var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, Margin = new(0, 0, 8, 0) }); _save.Style = (Style)FindResource("Primary"); _save.Click += (_, _) => Save(); buttons.Children.Add(_save);
+        var cancel = new Button { Content = "Back to mouse", Margin = new(0, 0, 8, 0) };
+        cancel.Click += (_, _) => { if (_hostedClose is not null) _hostedClose(); else Close(); }; buttons.Children.Add(cancel);
+        _save.Style = (Style)FindResource("Primary"); _save.Click += (_, _) => Save(); buttons.Children.Add(_save);
         DockPanel.SetDock(buttons, Dock.Right); footer.Children.Add(buttons); footer.Children.Add(T("Saved locally · No device settings are changed", 11, "Muted")); DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer);
         var body = new Grid(); body.ColumnDefinitions.Add(new() { Width = new(390) }); body.ColumnDefinitions.Add(new());
-        var left = new StackPanel(); left.Children.Add(T("1   Choose its position", 16));
+        var left = new Grid(); left.RowDefinitions.Add(new() { Height = GridLength.Auto }); left.RowDefinitions.Add(new()); left.RowDefinitions.Add(new() { Height = GridLength.Auto }); left.Children.Add(T("1   Choose its position", 16));
         Canvas.SetLeft(_drawing, 20); Canvas.SetTop(_drawing, 10); _picture.Children.Add(_drawing);
-        _marker.Fill = B("RingSelection"); _marker.Stroke = B("Accent"); _picture.Children.Add(_marker); left.Children.Add(_picture);
-        left.Children.Add(T("Click the mouse drawing where this button is located. You can move the marker before saving.", 12, "Muted"));
+        _marker.Fill = B("RingSelection"); _marker.Stroke = B("Accent"); _picture.Children.Add(_marker);
+        var drawingView = new Viewbox { Child = _picture, Stretch = Stretch.Uniform, MaxWidth = 360, MinHeight = 220 }; Grid.SetRow(drawingView, 1); left.Children.Add(drawingView);
+        var positionHint = T("Click the mouse drawing where this button is located. You can move the marker before saving.", 12, "Muted"); Grid.SetRow(positionHint, 2); left.Children.Add(positionHint);
         _drawing.MouseLeftButtonUp += (_, e) => { if (_drawing.TryNormalize(e.GetPosition(_drawing), out double x, out double y)) PickPosition(x, y); };
         _drawing.SizeChanged += (_, _) => PlaceMarker(); body.Children.Add(left);
         var form = new StackPanel { Margin = new(20, 0, 0, 0) };
         form.Children.Add(T("2   Press the physical button", 16)); form.Children.Add(T("Release all buttons, click Listen, then press the same physical button twice. Original hardware functions still occur while learning.", 12, "Muted"));
         _listen.Margin = new(0, 15, 0, 14); _listen.Click += (_, _) => { if (_capture is null) Listen(); else Stop("Listening cancelled."); }; form.Children.Add(_listen);
+        var rescan = new Button { Content = "Rescan inputs", HorizontalAlignment = HorizontalAlignment.Left, Margin = new(0, 0, 0, 12) };
+        rescan.Click += async (_, _) => { Stop("Rescanning inputs…"); await Discover(); }; form.Children.Add(rescan);
         _status.Foreground = B("Muted"); _status.Text = "Choose a point on the drawing first."; form.Children.Add(_status);
         _detected.Margin = new(0, 16, 0, 14); form.Children.Add(_detected);
         form.Children.Add(T("3   Name this button", 16)); _name.Margin = new(0, 10, 0, 12); form.Children.Add(_name);
@@ -65,11 +70,14 @@ internal sealed class HidLearningWindow : Window
         var fresh = new Button { Content = "+ New button", HorizontalAlignment = HorizontalAlignment.Left, Margin = new(0, 8, 0, 0) };
         fresh.Click += (_, _) => { Stop(""); _saved.SelectedIndex = -1; _identity = null; _id = Guid.NewGuid(); _position = false; _marker.Visibility = Visibility.Collapsed; _listen.IsEnabled = false; _save.IsEnabled = false; _name.Text = "Extra button"; _detected.Text = "No input learned yet"; _status.Text = "Choose a new position on the drawing."; }; form.Children.Add(fresh);
         var scroll = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; Grid.SetColumn(scroll, 1); body.Children.Add(scroll); root.Children.Add(body); Content = root;
-        _timer.Tick += (_, _) => { if (_capture is HidInputCapture { IsDisposed: true }) Stop("Device changed. Close and reopen learning to rescan."); else if (_capture is not null && Environment.TickCount64 >= _expires) Stop("No confirmed input. Try again; a firmware-only button may send no accessible event."); };
-        Loaded += async (_, _) => { if (!_preview) await Discover(); }; Closed += (_, _) => { _closed = true; Stop(""); };
+        _timer.Tick += (_, _) => { if (_capture is HidInputCapture { IsDisposed: true } capture) Stop(capture.StopReason ?? "Input observation ended. Choose Listen to retry."); else if (_capture is not null && Environment.TickCount64 >= _expires) Stop("No confirmed input. Try again; a firmware-only button may send no accessible event."); };
+        root.Loaded += async (_, _) => { if (!_preview && !_discoveryStarted) await Discover(); }; Closed += (_, _) => { _closed = true; Stop(""); };
     }
     private async Task Discover()
     {
+        if (_closed || _preview) return;
+        if (_discovering) { _rescanPending = true; return; }
+        _discoveryStarted = _discovering = true; _listen.IsEnabled = false;
         try
         {
             var endpoints = await Task.Run(HidInventory.Enumerate); if (_closed) return;
@@ -79,11 +87,16 @@ internal sealed class HidLearningWindow : Window
             if (_endpoints.Any(e => e.CapabilityError.Length > 0)) _capabilities.Text += "\nSome collections have no readable button capabilities.";
         }
         catch (Exception e) { if (!_closed) _capabilities.Text = "Descriptor discovery unavailable: " + e.Message + "\nStandard mouse learning can still be attempted."; }
+        finally
+        {
+            _discovering = false; if (!_closed) _listen.IsEnabled = _position && _connected;
+            if (_rescanPending && !_closed) { _rescanPending = false; _ = Discover(); }
+        }
     }
     private void PickPosition(double x, double y)
     {
         if (_capture is not null) Stop("Position changed. Click Listen to begin again.");
-        _x = x; _y = y; _position = true; PlaceMarker(); _listen.IsEnabled = true;
+        _x = x; _y = y; _position = true; PlaceMarker(); _listen.IsEnabled = !_discovering && _connected;
         _save.IsEnabled = _identity is not null; _status.Text = _identity is null ? "Position selected. Click Listen and press your button twice." : "Position updated. Save to keep this input and its new location.";
     }
     private void PlaceMarker()
@@ -93,7 +106,7 @@ internal sealed class HidLearningWindow : Window
     }
     private void Listen()
     {
-        if (!_position || _closed) return;
+        if (!_position || _closed || _discovering || !_connected) return;
         if (_begin is null) { _status.Text = "Input observation is unavailable in this preview."; return; }
         _identity = null; _save.IsEnabled = false; _session = new(_connection.Key, Environment.TickCount64 + 350); _expires = Environment.TickCount64 + 25000;
         try { _capture = _begin(_endpoints, Observe, message => { if (!_closed) _status.Text = message; }); _listen.Content = "Listening… Cancel"; _status.Text = "Press the same button twice. Moushift does not block its original function."; _timer.Start(); }
@@ -113,13 +126,13 @@ internal sealed class HidLearningWindow : Window
     }
     private void LoadSaved(LearnedControl control)
     { Stop(""); _id = control.Id; _identity = control.Identity; _observedAt = control.ObservedAt; _name.Text = control.Name; PickPosition(control.X, control.Y); _detected.Text = Label(control.Identity) + " · previously confirmed"; _save.IsEnabled = true; }
-    private void Stop(string message) { _capture?.Dispose(); _capture = null; _timer.Stop(); _listen.Content = "Listen for button"; if (message.Length > 0) _status.Text = message; }
+    private void Stop(string message) { _capture?.Dispose(); _capture = null; _session = null; _timer.Stop(); _listen.Content = "Listen for button"; if (message.Length > 0) _status.Text = message; }
     private LearnedControl? BuildResult()
     {
         if (!_position || _identity is null || string.IsNullOrWhiteSpace(_name.Text)) return null;
         return new() { Id = _id, DeviceKey = _connection.Key, Name = _name.Text.Trim(), Identity = _identity, X = _x, Y = _y, ObservedAt = _observedAt };
     }
-    private void Save() { Result = BuildResult(); if (Result is null) { _status.Text = "Choose a position, confirm an input and enter a name."; return; } Stop(""); DialogResult = true; }
+    private void Save() { Result = BuildResult(); if (Result is null) { _status.Text = "Choose a position, confirm an input and enter a name."; return; } Stop(""); if (_hostedSave is not null) _hostedSave(Result); else DialogResult = true; }
     private static string Label(InputIdentity input) => input.StandardControl is { } control ? InputPresentation.Name(control)
         : input.Kind == LearnedInputKind.KeyboardKey ? "Extra key F" + (input.Usage - 0x7C + 13) : $"HID button {input.Usage}";
     private static Brush B(string key) => ThemeManager.Brush(key);

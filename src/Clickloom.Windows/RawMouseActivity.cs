@@ -18,7 +18,13 @@ public sealed class RawMouseActivity : IDisposable
         if (!RegisterRawInputDevices(devices, 1, (uint)Marshal.SizeOf<RawRegistration>()))
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     }
-    public void DeviceChanged() { _capture?.DeviceChanged(); _capture = null; _paths.Clear(); _reported.Clear(); }
+    public void DeviceChanged(nint change, nint device)
+    {
+        _paths.TryGetValue(device, out string? path);
+        _capture?.DeviceChanged(change, device, path);
+        if (_capture?.IsDisposed == true) _capture = null;
+        _paths.Remove(device); _reported.Remove(device);
+    }
     public HidInputCapture BeginCapture(nint window, MouseConnection connection, IReadOnlyList<HidEndpoint> endpoints, Action<ObservedControl> observed, Action<string> status)
     {
         _capture?.Dispose();
@@ -28,7 +34,7 @@ public sealed class RawMouseActivity : IDisposable
     {
         try { _capture?.Observe(input); }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or OverflowException)
-        { _capture?.DeviceChanged(); _capture = null; }
+        { _capture?.Fail("Input data could not be decoded. Choose Listen to try again."); _capture = null; }
         uint size = (uint)Marshal.SizeOf<RawHeader>();
         if (GetRawInputData(input, 0x10000005, out var header, ref size, size) == uint.MaxValue || header.Type != 0 || header.Device == 0) return;
         if (!_paths.TryGetValue(header.Device, out string? path))

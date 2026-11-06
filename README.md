@@ -11,6 +11,7 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 - Click Circle in the main workspace: centered Circle with a searchable, draggable action library on the right, folders, shortcut parameters and undo/redo.
 - Generic HID descriptor discovery without a manufacturer/model allowlist or vendor commands.
 - Teach a button: choose a point on the mouse drawing, explicitly listen, press the same input twice, name it and save locally.
+- Learning stays inside the main window. Registration arrivals and unrelated devices no longer cancel it; selected-input removal stops it with a retry message.
 - Learned input identities and normalized drawing positions persist per connection. Learning/repositioning does not change the device firmware or vendor configuration.
 - Light (silver / wine) and dark (charcoal / muted rose) themes, switchable from the title bar or Settings.
 - Atomic local settings writes with a last-good backup.
@@ -75,4 +76,4 @@ Do not attach personal profiles, device serials, raw device paths or unreviewed 
 
 Issue forms cover bugs and undetected inputs. Pull requests run Windows build/tests/offscreen previews. Release tags and `release/v<version>-preview.<number>` branches run verification and produce a **draft prerelease**, including a portable ZIP and SHA-256 checksum; publishing is a separate maintainer action. The workflow also supports a manual preview-tag input. Published releases are never overwritten by the draft helper.
 
-See [release notes](docs/releases/v0.14.3-preview.md). License: [MIT](LICENSE).
+See [release notes](docs/releases/v0.14.4-preview.md). License: [MIT](LICENSE).

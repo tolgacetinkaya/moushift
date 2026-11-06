@@ -35,7 +35,7 @@ public partial class MainWindow
     private nint ActivityMessage(nint window, int message, nint wParam, nint lParam, ref bool handled)
     {
         if (message == 0xFF) _deviceActivity?.Observe(lParam);
-        if (message == 0xFE) { _deviceActivity?.DeviceChanged(); _service?.InvalidateDeviceRoutes(); RefreshDevices(); }
+        if (message == 0xFE) { _deviceActivity?.DeviceChanged(wParam, lParam); _service?.InvalidateDeviceRoutes(); RefreshDevices(); }
         return 0;
     }
     private void UpdateDeviceActivity()
@@ -82,9 +82,10 @@ public partial class MainWindow
         SyncDeviceRows(_additionalDevices, connections.Where(c => c.IsAuxiliary));
         if (!_editingSavedProfile && _selectedDevice?.DeviceKey is { } selectedKey && !connectedKeys.Contains(selectedKey) && DevicesWorkspace.Visibility == Visibility.Visible)
         {
-            if (_circleEditor is not null) _editingSavedProfile = true;
+            if (_circleEditor is not null || _learningEditor is not null) _editingSavedProfile = true;
             else { _selectedDevice = null; ShowPage("devices"); }
         }
+        if (_learningDeviceKey is { } learningKey) _learningEditor?.UpdateConnection(connections.FirstOrDefault(c => c.Key == learningKey));
         AdditionalDevicesList.ItemsSource = _additionalDevices;
         ReceiverConnectionsList.ItemsSource = _deviceCards;
         AdditionalDevicesExpander.Visibility = _additionalDevices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;

@@ -19,6 +19,7 @@ public partial class MainWindow
         if (args.Contains("--edit-positions")) ShowButtonPositions();
         if (args.Contains("--edit-positions") && args.Contains("--edit-button")) PrepareDesignButtonEditor();
         if (args.Contains("--edit-circle")) OpenCircleWorkspace();
+        if (args.Contains("--teach-button")) PrepareLearningWorkspaceFixture();
         UpdateLayout(); PlaceMarkers();
         if (_circleEditor is not null && args.Contains("--folder")) _circleEditor.ShowFolderPreview();
         if (_circleEditor is not null && args.Contains("--drag-preview")) { UpdateLayout(); _circleEditor.ShowDragPresentationPreview(); }
@@ -58,6 +59,11 @@ public partial class MainWindow
             throw new InvalidOperationException("Circle did not open in the central workspace for the selected mouse.");
         _circleEditor.VerifyHostedSurface();
         if (!TryCloseCircleEditor()) throw new InvalidOperationException("Unchanged Circle could not close.");
+        PrepareLearningWorkspaceFixture(); UpdateLayout();
+        if (LearningWorkspaceHost.Visibility != Visibility.Visible || DevicesWorkspace.Visibility != Visibility.Collapsed
+            || IdentifyButton.Style != FindResource("Primary") || _learningEditor is null)
+            throw new InvalidOperationException("Teach a button did not open inside the main window from a visible button.");
+        _learningEditor.VerifyHostedLearning(); CloseLearningWorkspace();
         MappingsNav_Click(this, new RoutedEventArgs());
         var preferences = _workspacePreferences;
         ToggleSidebar_Click(this, new RoutedEventArgs()); UpdateLayout();

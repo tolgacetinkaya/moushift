@@ -61,7 +61,8 @@ public static class MouseConnectionCatalog
             string id = nodeId.ToString();
             // Do not read a Bluetooth adapter's battery as the peripheral's.
             if (bluetooth && id.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase)) break;
-            battery ??= ReadBattery(node);
+            bluetooth |= id.StartsWith("BTH", StringComparison.OrdinalIgnoreCase);
+            battery ??= ReadBattery(node, bluetooth);
             var friendly = TextProperty(node, new(new("a45c254e-df1c-4efd-8020-67d146a850e0"), 14));
             var text = !string.IsNullOrWhiteSpace(friendly) && !Generic(friendly) ? friendly : TextProperty(node, new(new("540b947e-8b40-45bc-a8a2-6a0b894cbda2"), 4));
             if (!string.IsNullOrWhiteSpace(text) && !Generic(text)) name = text;
@@ -79,10 +80,19 @@ public static class MouseConnectionCatalog
         auxiliary |= name.Contains("keyboard", StringComparison.OrdinalIgnoreCase) || name.Contains("virtual", StringComparison.OrdinalIgnoreCase);
         return new(key, name, transport, auxiliary, battery);
     }
-    private static int? ReadBattery(uint node)
+    private static int? ReadBattery(uint node, bool bluetooth)
     {
         // PKEY_Devices_BatteryLife: documented byte percentage; 101 means unknown.
         var key = new DeviceProperty(new("49cd1f76-5626-4b17-a4e8-18b4aa1a2213"), 10);
+        var value = ReadBatteryProperty(node, key);
+        if (value is not null || !bluetooth) return value;
+        // Some Windows Bluetooth stacks expose their cached percentage under this
+        // device-node property instead of the Shell BatteryLife key. Best effort:
+        // its absence or a different data type remains unknown, never guessed.
+        return ReadBatteryProperty(node, new(new("104ea319-6ee2-4701-bd47-8ddbf425bbe5"), 2));
+    }
+    private static int? ReadBatteryProperty(uint node, DeviceProperty key)
+    {
         var data = new byte[1]; uint size = 1;
         return CM_Get_DevNode_Property(node, ref key, out uint type, data, ref size, 0) == 0
             ? DecodeBattery(type, data.AsSpan(0, (int)Math.Min(size, 1))) : null;

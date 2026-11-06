@@ -55,4 +55,9 @@ workspace.json
 !/docs/ui-0142/circle-light.png
 !/docs/ui-0142/circle-dark.png
 !/docs/ui-0142/compact-dark.png
+!/docs/ui-0144/
+/docs/ui-0144/*
+!/docs/ui-0144/learning-light.png
+!/docs/ui-0144/learning-dark.png
+!/docs/ui-0144/learning-compact.png
 *.log

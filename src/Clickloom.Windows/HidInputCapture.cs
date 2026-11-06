@@ -20,6 +20,7 @@ public sealed class HidInputCapture : IDisposable
     private bool _disposed;
     public int RegisteredCollections => _extra.Count + 1;
     public bool IsDisposed => _disposed;
+    public string? StopReason { get; private set; }
     internal HidInputCapture(nint window, MouseConnection connection, IReadOnlyList<HidEndpoint> endpoints, Action<ObservedControl> observed, Action<string> status)
     {
         _connection = connection; _observed = observed; _status = status;
@@ -90,7 +91,17 @@ public sealed class HidInputCapture : IDisposable
         // A confirmation callback may dispose this capture. Finish every native parser call before invoking it.
         foreach (var signal in signals) { if (_disposed) break; _observed(signal); }
     }
-    internal void DeviceChanged() { if (_disposed) return; _status("Device connections changed. Release the buttons, rescan, and try again."); Dispose(); }
+    internal void DeviceChanged(nint change, nint device, string? path)
+    {
+        if (_disposed) return;
+        // Registration can announce current collections. Arrival notifications and
+        // other peripherals are not a loss of the selected mouse's capture.
+        if (change == 2 && _allowed.Contains(path ?? _paths.GetValueOrDefault(device) ?? ""))
+        { Fail("The selected mouse input was disconnected. Reconnect it and choose Listen again."); return; }
+        _paths.Remove(device);
+        if (_preparsed.Remove(device, out nint data)) Marshal.FreeHGlobal(data);
+    }
+    internal void Fail(string message) { if (_disposed) return; StopReason = message; _status(message); Dispose(); }
     public void Dispose()
     {
         if (_disposed) return; _disposed = true;

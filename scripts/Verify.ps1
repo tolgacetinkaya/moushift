@@ -52,6 +52,12 @@ try {
     }
     dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-devices (Join-Path $clickloomRoot 'docs/ui-0142/compact-dark.png') --design-fixture --compact --collapsed-nav --edit-circle --theme=dark
     if ($LASTEXITCODE -ne 0) { throw 'Collapsed compact Circle workspace failed.' }
+    foreach ($learningTheme in @('light', 'dark')) {
+        dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-devices (Join-Path $clickloomRoot ('docs/ui-0144/learning-' + $learningTheme + '.png')) --design-fixture --teach-button ('--theme=' + $learningTheme)
+        if ($LASTEXITCODE -ne 0) { throw 'Embedded learning workspace failed.' }
+    }
+    dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-devices (Join-Path $clickloomRoot 'docs/ui-0144/learning-compact.png') --design-fixture --compact --teach-button --theme=dark
+    if ($LASTEXITCODE -ne 0) { throw 'Compact embedded learning workspace failed.' }
     if ($InteractiveUi) {
         dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-preview (Join-Path $clickloomRoot 'docs\clickloom-preview.png') --verify-ui --theme=light
         if ($LASTEXITCODE -ne 0) { throw 'WPF editor verification failed.' }

@@ -1,6 +1,9 @@
 using Clickloom.Core;
 using Clickloom.Windows;
 
+if (args.Contains("--learning-registration-check"))
+    return LearningRegistrationProbe.Run(args[Array.IndexOf(args, "--learning-registration-check") + 1]);
+
 if (args.Contains("--hid-discovery"))
 {
     var endpoints = HidInventory.Enumerate(out var diagnostics); var connections = MouseConnectionCatalog.Enumerate();
@@ -64,6 +67,7 @@ var tests = new (string Name, Action Run)[]
     ("generic descriptor parsing preserves vendor pages, report IDs and collections", GenericHidCapabilities),
     ("raw mouse learning decodes edges and horizontal wheel without movement", GenericRawLearning),
     ("keyboard learning excludes ordinary typing", KeyboardLearningPrivacy),
+    ("learning survives registration arrivals and unrelated removals but stops on selected input removal", LearningNotifications),
     ("driver routes require one physical match and reject identical mouse ambiguity", PhysicalDeviceRoutes),
     ("connection inventory groups interfaces without claiming mouse power", ConnectionGrouping),
     ("Windows battery percentages validate ranges and never cross device identities", BatteryLevels),
@@ -224,6 +228,23 @@ static void RawCircleHookOrdering()
     Require(router.Press(settings, "corsair:path", MouseControl.MiddleButton, true, true, null)?.DeviceKey == "corsair", "Circle could not reopen after closing.");
     Require(RingActionSelection.ForwardOriginalButton(true, MouseControl.XButton1)
         && !RingActionSelection.ForwardOriginalButton(false, MouseControl.MiddleButton), "Driverless fix changed exclusive behavior or swallowed another original button.");
+}
+
+static void LearningNotifications()
+{
+    var connection = new MouseConnection("mouse:a", "A", "Test", "USB", true, false, ["selected:mouse"]);
+    var statuses = new List<string>();
+    using var capture = new HidInputCapture(0, connection, [], _ => { }, statuses.Add);
+    capture.DeviceChanged(1, 100, "selected:mouse");
+    capture.DeviceChanged(1, 200, "extra:collection");
+    capture.DeviceChanged(2, 200, "other:mouse");
+    capture.DeviceChanged(2, 300, null);
+    if (capture.IsDisposed || statuses.Count != 0) throw new Exception("Registration or unrelated notifications terminated learning.");
+    capture.DeviceChanged(2, 100, "SELECTED:MOUSE");
+    if (!capture.IsDisposed || capture.StopReason is null || statuses.Count != 1)
+        throw new Exception("Removing the selected input did not stop capture with a useful retry message.");
+    capture.DeviceChanged(2, 100, "selected:mouse");
+    if (statuses.Count != 1) throw new Exception("Disposed capture reported the same removal again.");
 }
 
 static void BatteryLevels()

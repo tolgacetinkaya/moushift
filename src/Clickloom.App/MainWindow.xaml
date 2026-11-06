@@ -208,7 +208,7 @@
                       <TextBlock x:Name="BackCalloutAction" />
                     </StackPanel>
                   </Grid>
-                  <Button Grid.Row="1" x:Name="IdentifyButton" Content="Teach a button…" Click="IdentifyInput_Click" Style="{StaticResource Quiet}" HorizontalAlignment="Center" FontSize="12" />
+                  <Button Grid.Row="1" x:Name="IdentifyButton" Content="Teach a button" Click="IdentifyInput_Click" Style="{StaticResource Primary}" HorizontalAlignment="Center" Padding="18,10" MinWidth="160" MinHeight="40" FontSize="14" AutomationProperties.Name="Teach a button" />
                   <Expander Grid.Row="2" x:Name="ScopeExpander" Header="Input support" Margin="0,8,0,0">
                     <StackPanel>
                       <TextBlock x:Name="ScopeLabel" Style="{StaticResource Caption}" />
@@ -368,6 +368,7 @@
               </Grid>
             </Border>
           </Grid>
+          <ContentControl x:Name="LearningWorkspaceHost" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
           <ContentControl x:Name="CircleWorkspaceHost" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
           <ScrollViewer x:Name="ProfilesPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32">
             <StackPanel MaxWidth="1160" HorizontalAlignment="Stretch">
