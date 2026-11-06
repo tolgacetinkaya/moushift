@@ -11,6 +11,7 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 - Side-by-side mouse gallery. Select any card to open that mouse alone in the center with its resizable settings inspector on the right. Navigation collapses to icons; profiles stay independent per mouse/application.
 - Battery badges on the gallery and selected mouse, when Windows exposes a percentage. Missing readings stay explicitly unavailable; no proprietary receiver protocol is used.
 - Click Circle in the main workspace: centered Circle with a searchable, draggable action library on the right, folders, shortcut parameters and undo/redo.
+- Application-specific Circles: select a mouse, open **Edit Circle → + App-specific Circle**, then search installed apps. New Circles copy that mouse's fallback; saved profiles stay independent. See [Application Circles](docs/APPLICATION_CIRCLES.md) for discovery and foreground-matching limits.
 - Generic HID descriptor discovery without a manufacturer/model allowlist or vendor commands.
 - Light (silver / green) and dark (charcoal / neon mint) themes, switchable from the title bar or Settings.
 - Atomic local settings writes with a last-good backup.

@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 
 var tests = new (string Name, Action Run)[]
 {
+    ("application Circle creation preserves drafts, mouse scope, triggers and persistence", ApplicationProfileChecks.Run),
     ("learning requires repeated transitions from the selected device after arming", LearnInputSession),
     ("learned positions and independent input identities survive restart", LearnedPersistence),
     ("relearning preserves assignments and validation rejects invalid positions and cross-mouse bindings", LearnedValidation),

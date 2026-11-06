@@ -5,7 +5,6 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using Clickloom.Core;
-using Microsoft.Win32;
 
 namespace Clickloom.App;
 
@@ -25,7 +24,10 @@ public sealed partial class RingEditorWindow : Window
     private readonly TextBlock _searchHint = new() { Text = "Search actions…", Margin = new(12, 0, 0, 0), IsHitTestVisible = false };
     private readonly ComboBox _profiles = new() { MinWidth = 170, MaxWidth = 260, DisplayMemberPath = "Name", SelectedValuePath = "Id" };
     private readonly ComboBox _manual = new() { MinWidth = 150, MaxWidth = 220, DisplayMemberPath = "Name", SelectedValuePath = "Id" };
-    private readonly CheckBox _adapt = new() { Content = "Adapt Circle to app" }, _inherit = new() { Content = "Use General Circle button" };
+    private readonly CheckBox _adapt = new() { Content = "Switch with active app" }, _inherit = new() { Content = "Use this mouse's usual Circle button" };
+    private readonly ContentControl _applicationPickerHost = new() { Visibility = Visibility.Collapsed, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+    private readonly TextBlock _scopeHint = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new(0, 8, 0, 0) };
+    private readonly TextBlock _contextTitle = new() { FontSize = 13, Margin = new(0, 0, 0, 6) };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
     private readonly TextBlock _breadcrumb = new() { FontSize = 16, FontWeight = FontWeights.SemiBold };
     private readonly TextBlock _selection = new() { FontSize = 15, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 220 };
@@ -42,6 +44,7 @@ public sealed partial class RingEditorWindow : Window
     private CircleDocument Document => _documents[_profileId];
     private int[]? SelectedPath => _selected ?? (_folder.Count > 0 ? _folder.ToArray() : null);
     public List<RingSlot> Slots => Document.Slots;
+    internal Guid EditingProfileId => _profileId;
     private MappingProfile Profile => _draft.Profiles.Single(p => p.Id == _profileId);
     private MappingProfile General => _draft.Profiles.First(p => p.DeviceKey == _deviceKey && p.ApplicationPath is null);
     private IEnumerable<MappingProfile> DeviceProfiles => _draft.Profiles.Where(p => p.DeviceKey == _deviceKey);
@@ -76,11 +79,14 @@ public sealed partial class RingEditorWindow : Window
         var contexts = new DockPanel { Margin = new(28, 0, 28, 14) };
         var switches = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         _adapt.Margin = new(12, 0, 14, 0); switches.Children.Add(_adapt); switches.Children.Add(_manual); DockPanel.SetDock(switches, Dock.Right); contexts.Children.Add(switches);
+        var contextLabel = new StackPanel(); _contextTitle.Text = "Circle for"; _contextTitle.Foreground = B("Muted"); contextLabel.Children.Add(_contextTitle);
         var tabs = new StackPanel { Orientation = Orientation.Horizontal }; tabs.Children.Add(_profiles);
-        var add = new Button { Content = "+ Application", Margin = new(8, 0, 0, 0), IsEnabled = _deviceKey is not null }; add.Click += (_, _) => AddApplication(); tabs.Children.Add(add); contexts.Children.Add(tabs); Grid.SetRow(contexts, 1); root.Children.Add(contexts);
-        _profiles.SelectionChanged += (_, _) => { if (_loading || _profiles.SelectedValue is not Guid id) return; _profileId = id; ResetNavigation(); Refresh(); RefreshCatalog(); };
+        var add = new Button { Content = "+ App-specific Circle", Margin = new(8, 0, 0, 0), IsEnabled = _deviceKey is not null }; add.Click += (_, _) => ShowApplicationPicker(); tabs.Children.Add(add); contextLabel.Children.Add(tabs);
+        _scopeHint.Foreground = B("Muted"); contextLabel.Children.Add(_scopeHint); contexts.Children.Add(contextLabel); Grid.SetRow(contexts, 1); root.Children.Add(contexts);
+        _profiles.SelectionChanged += (_, _) => { if (_loading || _profiles.SelectedValue is not Guid id) return; _profileId = id; ResetNavigation(); Refresh(); RefreshCatalog(); UpdateScopeHint(); };
         _adapt.Checked += (_, _) => ChangeAdapt(); _adapt.Unchecked += (_, _) => ChangeAdapt();
-        _manual.SelectionChanged += (_, _) => { if (!_loading && _manual.SelectedValue is Guid id) General.ManualCircleProfileId = id; };
+        _manual.ToolTip = "Circle used for every app while automatic switching is off";
+        _manual.SelectionChanged += (_, _) => { if (!_loading && _manual.SelectedValue is Guid id) { General.ManualCircleProfileId = id; UpdateScopeHint(); } };
         _inherit.Checked += (_, _) => { if (!_loading) Profile.InheritCircleTrigger = true; }; _inherit.Unchecked += (_, _) => { if (!_loading) Profile.InheritCircleTrigger = false; };
 
         var body = new Grid { Margin = new(16, 0, 16, 0) }; body.ColumnDefinitions.Add(new() { MinWidth = 340 }); body.ColumnDefinitions.Add(new() { Width = new(6) }); body.ColumnDefinitions.Add(_libraryColumn);
@@ -115,11 +121,11 @@ public sealed partial class RingEditorWindow : Window
         var save = new Button { Content = "Save changes", Style = (Style)FindResource("Primary") };
         save.Click += (_, _) => { var candidate = _draft.DeepClone(); ApplyTo(candidate); var errors = SettingsValidator.Validate(candidate); if (errors.Count > 0) SetStatus(string.Join(" ", errors), true); else if (_hostedSave is not null) _hostedSave(); else DialogResult = true; }; buttons.Children.Add(save);
         DockPanel.SetDock(buttons, Dock.Right); footer.Children.Add(buttons); _status.Foreground = B("Muted"); footer.Children.Add(_status); Grid.SetRow(footer, 3); root.Children.Add(footer);
-        AttachDragLayer(root); Content = new AdornerDecorator { Child = root };
+        AttachDragLayer(root); Grid.SetRowSpan(_applicationPickerHost, 4); Panel.SetZIndex(_applicationPickerHost, 100); root.Children.Add(_applicationPickerHost); Content = new AdornerDecorator { Child = root };
         _hoverTimer.Tick += (_, _) => { _hoverTimer.Stop(); if (_hoverFolder is { } path) { _folder.Clear(); _folder.AddRange(path); _hoverFolder = null; _selected = null; Refresh(); } };
-        root.PreviewKeyDown += (_, e) => { if ((Keyboard.Modifiers & ModifierKeys.Control) == 0 || Keyboard.FocusedElement is TextBox) return; if (e.Key is Key.Z or Key.Y) { History(e.Key == Key.Y); e.Handled = true; } };
+        root.PreviewKeyDown += (_, e) => { if (_applicationPickerHost.Visibility == Visibility.Visible || (Keyboard.Modifiers & ModifierKeys.Control) == 0 || Keyboard.FocusedElement is TextBox) return; if (e.Key is Key.Z or Key.Y) { History(e.Key == Key.Y); e.Handled = true; } };
         Closing += (_, e) => { if (DialogResult == true || _discarded || !HasChanges()) return; if (new ConfirmActionWindow("Discard changes", "Discard Circle changes?", "Your saved profiles have not been changed. Discard this editing session?", "Discard") { Owner = DialogOwner }.ShowDialog() != true) e.Cancel = true; };
-        Closed += (_, _) => { EndDragPresentation(); _preview?.Close(); }; RefreshProfiles(); Refresh(); RefreshCatalog();
+        Closed += (_, _) => { HideApplicationPicker(); EndDragPresentation(); _preview?.Close(); }; RefreshProfiles(); Refresh(); RefreshCatalog();
     }
     private bool HasChanges() => _documents.Values.Any(d => d.IsChanged) || System.Text.Json.JsonSerializer.Serialize(_draft) != _initialSettings;
     public void ApplyTo(AppSettings target)
@@ -132,28 +138,46 @@ public sealed partial class RingEditorWindow : Window
             existing.CircleAutoSwitch = profile.CircleAutoSwitch; existing.ManualCircleProfileId = profile.ManualCircleProfileId; existing.InheritCircleTrigger = profile.InheritCircleTrigger;
         }
     }
-    private void AddApplication()
+    internal void ShowApplicationPicker()
     {
-        if (_draft.Profiles.Count >= SettingsValidator.MaximumProfiles) { SetStatus("The profile limit has been reached.", true); return; }
-        var picker = new OpenFileDialog { Title = "Choose an application", Filter = "Windows application (*.exe)|*.exe" }; if (picker.ShowDialog(DialogOwner) != true) return;
-        var existing = DeviceProfiles.FirstOrDefault(p => string.Equals(p.ApplicationPath, picker.FileName, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null) _profileId = existing.Id;
-        else
+        if (_deviceKey is null) return;
+        HideApplicationPicker();
+        _preview?.Close();
+        _applicationPickerHost.Content = new ApplicationPicker(DialogOwner, General.DeviceName ?? "This mouse",
+            DeviceProfiles.Where(p => p.ApplicationPath is not null).Select(p => p.ApplicationPath!),
+            General.CircleAutoSwitch ?? General.AutoSwitchApplications ?? _draft.AutoSwitchProfiles, SelectApplication, HideApplicationPicker);
+        _applicationPickerHost.Visibility = Visibility.Visible;
+    }
+    private void HideApplicationPicker()
+    { (_applicationPickerHost.Content as ApplicationPicker)?.Dispose(); _applicationPickerHost.Content = null; _applicationPickerHost.Visibility = Visibility.Collapsed; }
+    private void SelectApplication(Clickloom.Windows.ApplicationEntry app, bool automatic)
+    {
+        if (_deviceKey is null || app.ExecutablePath is null) return;
+        try
         {
-            var profile = new MappingProfile { DeviceKey = _deviceKey, DeviceName = General.DeviceName, Name = System.IO.Path.GetFileNameWithoutExtension(picker.FileName), ApplicationPath = picker.FileName,
-                RingSlots = _documents[General.Id].Slots.Select(s => s.DeepClone()).ToList(), Bindings = Enum.GetValues<MouseControl>().Select(c => new ButtonBinding { Input = c }).ToList() };
-            _draft.Profiles.Add(profile); _documents[profile.Id] = new(profile.RingSlots); _profileId = profile.Id;
+            // Copy the latest default draft, including unsaved folder/shortcut edits.
+            General.RingSlots = _documents[General.Id].Slots.Select(s => s.DeepClone()).ToList();
+            var profile = ApplicationCircleProfiles.GetOrCreate(_draft, _deviceKey, app.ExecutablePath, app.Name);
+            if (!_documents.ContainsKey(profile.Id)) _documents[profile.Id] = new(profile.RingSlots);
+            _profileId = profile.Id; General.CircleAutoSwitch = automatic;
+            HideApplicationPicker(); ResetNavigation(); RefreshProfiles(); Refresh(); RefreshCatalog();
         }
-        ResetNavigation(); RefreshProfiles(); Refresh(); RefreshCatalog();
+        catch (InvalidOperationException error) { HideApplicationPicker(); SetStatus(error.Message, true); }
     }
     private void RefreshProfiles()
     {
-        _loading = true; var profiles = DeviceProfiles.Select(p => new ProfileChoice(p.Id, p.ApplicationPath is null ? "General" : p.Name)).ToArray(); _profiles.ItemsSource = profiles; _profiles.SelectedValue = _profileId;
+        _loading = true; var profiles = DeviceProfiles.OrderBy(p => p.ApplicationPath is not null).Select(p => new ProfileChoice(p.Id, p.ApplicationPath is null ? "All applications" : p.Name)).ToArray(); _profiles.ItemsSource = profiles; _profiles.SelectedValue = _profileId;
         _manual.ItemsSource = profiles; _manual.SelectedValue = General.ManualCircleProfileId ?? General.Id;
         _adapt.IsChecked = General.CircleAutoSwitch ?? General.AutoSwitchApplications ?? _draft.AutoSwitchProfiles;
-        _manual.Visibility = _adapt.IsChecked == true ? Visibility.Collapsed : Visibility.Visible; _loading = false;
+        _manual.Visibility = _adapt.IsChecked == true ? Visibility.Collapsed : Visibility.Visible; _loading = false; UpdateScopeHint();
     }
-    private void ChangeAdapt() { if (_loading) return; General.CircleAutoSwitch = _adapt.IsChecked == true; _manual.Visibility = _adapt.IsChecked == true ? Visibility.Collapsed : Visibility.Visible; }
+    private void ChangeAdapt() { if (_loading) return; General.CircleAutoSwitch = _adapt.IsChecked == true; _manual.Visibility = _adapt.IsChecked == true ? Visibility.Collapsed : Visibility.Visible; UpdateScopeHint(); }
+    private void UpdateScopeHint()
+    {
+        _scopeHint.Text = _adapt.IsChecked != true ? "Automatic switching is off. The fixed Circle on the right is used in every app."
+            : Profile.ApplicationPath is null ? "Default for this mouse. Used whenever an app has no custom Circle."
+            : $"Used when {Profile.Name} is in front. Save changes to apply to this mouse.";
+    }
     private void History(bool redo) { if (redo) Document.Redo(); else Document.Undo(); ResetNavigation(); Refresh(); }
     private void ResetNavigation() { _folder.Clear(); _selected = null; }
     private void Refresh()
@@ -354,6 +378,18 @@ public sealed partial class RingEditorWindow : Window
         if (!editor._folder.SequenceEqual(new[] { 3 }) || editor.Slots[3].Children.Count != 2)
             throw new InvalidOperationException("Single-click folder navigation or child undo failed.");
         editor._documents[app.Id].Place([0], CircleCatalog.Actions.Single(x => x.Id == "volume.adjust").Create(), false, out error);
+        // The real picker callback must keep unsaved defaults and reopen existing app drafts.
+        string savedBefore = System.Text.Json.JsonSerializer.Serialize(fixture);
+        editor.SelectApplication(new("Browser", @"C:\Apps\browser.exe", "Fixture"), true);
+        Guid browserId = editor.EditingProfileId;
+        if (editor.Slots[3].Children.Count != 2 || editor.Profile.InheritCircleTrigger != true
+            || editor.General.CircleAutoSwitch != true || editor._profiles.SelectedValue is not Guid selectedApp || selectedApp != browserId)
+            throw new InvalidOperationException("App selection did not copy the current Circle draft or select its profile.");
+        editor.Document.Place([0], CircleCatalog.Actions.Single(x => x.Id == "keyboard.copy").Create(), false, out error);
+        editor.SelectApplication(new("Browser", @"C:\Apps\BROWSER.exe", "Fixture"), true);
+        if (editor.EditingProfileId != browserId || editor.Slots[0].Action.KeyCode != 0x43
+            || System.Text.Json.JsonSerializer.Serialize(fixture) != savedBefore)
+            throw new InvalidOperationException("Reopening an app replaced its draft or wrote saved settings.");
         editor.ApplyTo(fixture); editor._discarded = true; editor.Close();
         if (System.Text.Json.JsonSerializer.Serialize(fixture.Profiles.Single(p => p.Id == b.Id)) != before
             || fixture.Profiles.Single(p => p.Id == app.Id).RingSlots[0].Kind != RingSlotKind.Adjustment

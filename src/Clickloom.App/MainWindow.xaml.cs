@@ -310,7 +310,7 @@ public partial class MainWindow : Window
         bool prior = _loading; _loading = true;
         _profiles.Clear();
         foreach (var profile in _settings.Profiles.Where(profile => string.Equals(profile.DeviceKey, _deviceScope ? _selectedDevice?.DeviceKey : null, StringComparison.Ordinal)))
-            _profiles.Add(new(profile.Id, profile.Name,
+            _profiles.Add(new(profile.Id, profile.ApplicationPath is null ? "All applications" : profile.Name,
                 string.IsNullOrWhiteSpace(profile.ApplicationPath) ? "All applications" : Path.GetFileName(profile.ApplicationPath)));
         ProfilesList.SelectedItem = _profiles.FirstOrDefault(p => p.Id == _editingProfileId) ?? _profiles[0];
         _editingProfileId = ((ProfileRow)ProfilesList.SelectedItem).Id;
@@ -498,7 +498,8 @@ public partial class MainWindow : Window
         AutoSwitchCheck.IsChecked = _settings.Profiles.FirstOrDefault(p => p.DeviceKey == profile.DeviceKey && p.ApplicationPath is null)?.AutoSwitchApplications ?? _settings.AutoSwitchProfiles;
         _loading = loading;
         string target = string.IsNullOrWhiteSpace(profile.ApplicationPath) ? "All applications" : Path.GetFileName(profile.ApplicationPath);
-        ProfileContext.Text = $"{profile.Name} · {target}" + (profile.DeviceKey is not null ? " · This device" : "");
+        ProfileContext.Text = profile.ApplicationPath is null ? "Default settings for this mouse."
+            : $"Settings for {profile.Name} on this mouse. Open Edit Circle to customize its menu.";
         ScopeLabel.Text = profile.DeviceKey is null ? "Shared profile" : "Device-specific profile";
         ScopeDescription.Text = profile.DeviceKey is null ? "Applies to mice that send the same Windows input." : "Applies only to the selected input source.";
     }
@@ -506,24 +507,8 @@ public partial class MainWindow : Window
     private void AddProfile_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedDevice?.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse first."; return; }
-        var dialog = new OpenFileDialog { Title = "Choose an application for this profile", Filter = "Windows application (*.exe)|*.exe", CheckFileExists = true };
-        if (dialog.ShowDialog(this) != true) return;
-        string? deviceKey = _selectedDevice.DeviceKey;
-        var existing = _settings.Profiles.FirstOrDefault(p => p.DeviceKey == deviceKey && string.Equals(p.ApplicationPath, dialog.FileName, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null)
-        {
-            OpenProfile_Click(new System.Windows.Controls.Button { Tag = existing.Id }, e);
-            StatusText.Text = "Selected the existing profile for this application."; return;
-        }
-        var profile = new MappingProfile
-        {
-            Name = Path.GetFileNameWithoutExtension(dialog.FileName), ApplicationPath = dialog.FileName, DeviceKey = deviceKey, DeviceName = _selectedDevice?.Name,
-            RingSlots = (_settings.Profiles.FirstOrDefault(p => p.DeviceKey == deviceKey && p.ApplicationPath is null)?.RingSlots ?? RingDefaults.Create()).Select(s => s.DeepClone()).ToList(),
-            Bindings = MouseNames.Select(m => new ButtonBinding { Input = m.Control }).ToList()
-        };
-        var next = _settings.DeepClone(); next.Profiles.Add(profile);
-        if (CommitSettings(next, $"Added a profile for {profile.Name}. You can now edit its assignments."))
-        { OpenProfile_Click(new System.Windows.Controls.Button { Tag = profile.Id }, e); }
+        OpenCircleWorkspace();
+        _circleEditor?.ShowApplicationPicker();
     }
 
     private void AutoSwitch_Changed(object sender, RoutedEventArgs e)

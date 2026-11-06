@@ -67,6 +67,7 @@ public partial class MainWindow
         if (_circleEditor is null) return;
         var next = _settings.DeepClone(); _circleEditor.ApplyTo(next);
         if (!CommitSettings(next, "Click Circle saved for this mouse.")) return;
+        _editingProfileId = _circleEditor.EditingProfileId;
         ReleaseCircleWorkspace(); PopulateProfiles(); RefreshBindings();
     }
 
