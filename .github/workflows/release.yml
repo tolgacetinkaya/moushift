@@ -1,0 +1,32 @@
+name: Draft preview release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verify
+        shell: pwsh
+        run: ./scripts/Verify.ps1
+      - name: Build portable ZIP
+        shell: pwsh
+        run: ./scripts/Package.ps1
+      - name: Create a draft prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$') { throw 'Invalid release tag.' }
+          gh release create $env:RELEASE_TAG artifacts/release/*.zip artifacts/release/SHA256SUMS.txt --verify-tag --draft --prerelease --title "Clickloom $env:RELEASE_TAG" --notes-file docs/releases/v0.12.0-preview.1.md
+          if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }

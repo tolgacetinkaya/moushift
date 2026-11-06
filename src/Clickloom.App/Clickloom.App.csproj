@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- WPF hosts the UI and its manifest owns DPI; WinForms is used only for NotifyIcon. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>Clickloom</AssemblyName>
+    <RootNamespace>Clickloom.App</RootNamespace>
+    <Version>0.12.0</Version>
+    <Description>Markadan bağımsız Windows mouse tuş atama stüdyosu.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets/*.png" />
+    <ProjectReference Include="../Clickloom.Core/Clickloom.Core.csproj" />
+    <ProjectReference Include="../Clickloom.Windows/Clickloom.Windows.csproj" />
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+</Project>

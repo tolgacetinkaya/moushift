@@ -1,0 +1,39 @@
+name: Input not detected
+description: Describe a button that does not produce a learnable input
+title: "[Input] "
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Mouse model and connection type
+      placeholder: Model / USB cable, receiver or Bluetooth
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Clickloom and Windows versions
+    validations:
+      required: true
+  - type: textarea
+    id: button
+    attributes:
+      label: Which physical button, and what does it normally do?
+      description: Explain what happened after choosing a point and pressing the button twice. No device serial is needed.
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Learning result
+      options:
+        - No event observed
+        - One of two presses observed
+        - Wrong input observed
+        - Input learned, mapping still inactive
+        - Descriptor access denied
+  - type: textarea
+    id: summary
+    attributes:
+      label: Optional redacted capability summary
+      description: Counts and usage IDs only. Do not attach personal settings or unreviewed reports.

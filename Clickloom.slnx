@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Clickloom.App/Clickloom.App.csproj" />
+    <Project Path="src/Clickloom.Core/Clickloom.Core.csproj" />
+    <Project Path="src/Clickloom.Windows/Clickloom.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Clickloom.Core.Tests/Clickloom.Core.Tests.csproj" />
+    <Project Path="tests/Clickloom.Windows.Tests/Clickloom.Windows.Tests.csproj" />
+  </Folder>
+</Solution>

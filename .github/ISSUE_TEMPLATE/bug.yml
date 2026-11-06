@@ -1,0 +1,32 @@
+name: Bug report
+description: Report a reproducible application problem
+title: "[Bug] "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Clickloom and Windows versions
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected behavior and actual behavior
+      description: Separate fixture/preview behavior from an actual physical device test.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Area
+      options:
+        - HID discovery or learning
+        - Circle editor or drag/drop
+        - Profiles or persistence
+        - Live input backend
+        - Other
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence
+      description: Do not upload personal profiles, serials, full device paths or unreviewed raw input captures.
