@@ -2,9 +2,9 @@
 
 <img src="docs/branding/moushift-mark.svg" width="72" alt="Moushift star-cutout M logo">
 
-A Windows mouse configuration workspace with per-connection profiles, an editable Click Circle, and generic HID button discovery and learning. Built with .NET 10 / WPF, without third-party NuGet packages.
+A Windows mouse configuration workspace with per-connection profiles, an editable Click Circle, and generic HID connection discovery. Built with .NET 10 / WPF, without third-party NuGet packages.
 
-**Preview software.** HID discovery and learning are separate from exclusive input remapping. A learned input is not automatically an intercepted or remappable input. This preview does not claim support for every physical button on every mouse.
+**Preview software.** Connection discovery is separate from exclusive input remapping. Previously learned inputs are preserved for compatibility, but new button learning has been removed. This preview does not claim support for every physical button on every mouse.
 
 ## What works
 
@@ -12,10 +12,7 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 - Battery badges on the gallery and selected mouse, when Windows exposes a percentage. Missing readings stay explicitly unavailable; no proprietary receiver protocol is used.
 - Click Circle in the main workspace: centered Circle with a searchable, draggable action library on the right, folders, shortcut parameters and undo/redo.
 - Generic HID descriptor discovery without a manufacturer/model allowlist or vendor commands.
-- Teach a button: choose a point on the mouse drawing, explicitly listen, press the same input twice, name it and save locally.
-- Learning stays inside the main window. Registration arrivals and unrelated devices no longer cancel it; selected-input removal stops it with a retry message.
-- Learned input identities and normalized drawing positions persist per connection. Learning/repositioning does not change the device firmware or vendor configuration.
-- Light (silver / wine) and dark (charcoal / muted rose) themes, switchable from the title bar or Settings.
+- Light (silver / green) and dark (charcoal / neon mint) themes, switchable from the title bar or Settings.
 - Atomic local settings writes with a last-good backup.
 
 ![Device gallery and resizable selected-mouse inspector — illustrative test data](docs/ui-0142/gallery-light.png)
@@ -25,9 +22,9 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 | Capability | Status |
 | --- | --- |
 | Descriptor discovery | Reads accessible Windows HID capabilities; declared usages are not a count of physical buttons |
-| Button learning | Standard mouse buttons/wheel, declared HID button usages, and F13–F24 from associated interfaces |
+| Button learning | Removed from the app; existing saved identities, positions and bindings are retained |
 | Firmware-only buttons | Cannot be learned when no accessible event is emitted |
-| Physical button location | Chosen manually on the drawing; HID does not supply universal diagram coordinates |
+| Physical button location | Standard markers and previously saved positions; HID does not supply universal diagram coordinates |
 | Driverless Click Circle | Standard buttons and horizontal tilt, exact mouse/app profiles; assigned middle clicks replace native clicks |
 | Standard live remapping | Optional Interception backend for exclusive remapping; separate installation and verified source routing |
 | Arbitrary learned HID remapping | Not implemented; assignments are explicitly stored as inactive drafts |
@@ -41,12 +38,11 @@ The app starts paused. With connected Raw Input sources it offers **Enable Circl
 Requires Windows 10/11 x64. The release ZIP includes the .NET and Windows Desktop runtimes: extract the complete folder and run `Moushift.exe`, without installing .NET separately. Keep all extracted files together. Source development requires the .NET 10 SDK; use `Start-Moushift.cmd` after a local build.
 
 1. Select your mouse connection in **Devices**.
-2. The selected mouse's button positions open in the center; choose **Teach a button…**.
-3. Click its position on the drawing.
-4. Click **Listen for button**, release held buttons, and press the target twice.
-5. Review the detected identity/name and choose **Save button**.
+2. Choose a standard button on the drawing or in the button list.
+3. Assign **Click Circle**, apply it, then choose **Enable Circle**.
+4. Test outside the editor. Only this mouse uses its saved device/application profile.
 
-If no event arrives, the button may be handled internally or its collection may be inaccessible. Choosing a diagram point alone does not manufacture a detectable input. Original hardware functions can still occur during learning.
+Teach a button and its listening workspace have been removed. Existing saved custom inputs and assignments are retained without a settings reset; arbitrary HID assignment drafts remain inactive.
 
 ## Build and verify
 
@@ -70,9 +66,9 @@ Real device presses, OLE drag/drop smoothness, wireless receivers and live remap
 
 ## Data and privacy
 
-Moushift was previously named Clickloom. To preserve existing assignments, profiles and themes without copying or resetting them, settings remain in `%LOCALAPPDATA%/Clickloom/profiles.json`; appearance is separate. Navigation collapse and inspector width are stored separately in `workspace.json`. Development/tests use `CLICKLOOM_DATA_DIR`. The learning listener is temporary and restricted to interfaces associated with the selected connection. Ordinary keyboard typing is ignored; the dedicated keyboard fallback only accepts F13–F24. There is no telemetry or automatic upload of reports/profiles.
+Moushift was previously named Clickloom. To preserve existing assignments, profiles and themes without copying or resetting them, settings remain in `%LOCALAPPDATA%/Clickloom/profiles.json`; appearance is separate. Navigation collapse and inspector width are stored separately in `workspace.json`. Development/tests use `CLICKLOOM_DATA_DIR`. The app no longer starts a button-learning listener. There is no telemetry or automatic upload of reports/profiles.
 
-Do not attach personal profiles, device serials, raw device paths or unreviewed input captures to public issues. See [contributing](CONTRIBUTING.md), [learning design](docs/HID_LEARNING.md) and [known limits](docs/KNOWN_LIMITS.md).
+Do not attach personal profiles, device serials, raw device paths or unreviewed input captures to public issues. See [contributing](CONTRIBUTING.md), [historical learning design](docs/HID_LEARNING.md) and [known limits](docs/KNOWN_LIMITS.md).
 
 ## Project workflow
 

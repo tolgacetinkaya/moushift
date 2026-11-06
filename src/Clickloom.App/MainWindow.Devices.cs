@@ -83,10 +83,9 @@ public partial class MainWindow
         SyncDeviceRows(_additionalDevices, connections.Where(c => c.IsAuxiliary));
         if (!_editingSavedProfile && _selectedDevice?.DeviceKey is { } selectedKey && !connectedKeys.Contains(selectedKey) && DevicesWorkspace.Visibility == Visibility.Visible)
         {
-            if (_circleEditor is not null || _learningEditor is not null) _editingSavedProfile = true;
+            if (_circleEditor is not null) _editingSavedProfile = true;
             else { _selectedDevice = null; ShowPage("devices"); }
         }
-        if (_learningDeviceKey is { } learningKey) _learningEditor?.UpdateConnection(connections.FirstOrDefault(c => c.Key == learningKey));
         AdditionalDevicesList.ItemsSource = _additionalDevices;
         ReceiverConnectionsList.ItemsSource = _deviceCards;
         AdditionalDevicesExpander.Visibility = _additionalDevices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;

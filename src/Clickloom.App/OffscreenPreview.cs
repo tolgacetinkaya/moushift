@@ -22,19 +22,12 @@ internal static class OffscreenPreview
         int devices = Array.IndexOf(args, "--render-devices"), setup = Array.IndexOf(args, "--render-setup");
         int settings = Array.IndexOf(args, "--render-settings");
         int editor = Array.IndexOf(args, "--render-circle-editor");
-        int learning = Array.IndexOf(args, "--render-hid-learning");
-        int index = learning >= 0 ? learning : circle >= 0 ? circle : reset >= 0 ? reset : workspace >= 0 ? workspace : devices >= 0 ? devices : setup >= 0 ? setup : editor >= 0 ? editor : settings;
+        int index = circle >= 0 ? circle : reset >= 0 ? reset : workspace >= 0 ? workspace : devices >= 0 ? devices : setup >= 0 ? setup : editor >= 0 ? editor : settings;
         if (index < 0) return false;
         if (index + 1 >= args.Length) throw new ArgumentException("An output PNG path is required.");
         if (args.Contains("--verify-circle")) new RingWindow(RingDefaults.Create(), true).VerifyNoActivationAndSelection(false);
         Window window;
-        if (learning >= 0)
-        {
-            var connection = new Clickloom.Windows.MouseConnection("preview:mouse", "HID mouse", "", "USB", false, false, []);
-            var view = new HidLearningWindow(connection, [], null, true); view.PreparePreview();
-            if (args.Contains("--verify-hid")) view.VerifyLearning(); window = view;
-        }
-        else if (circle >= 0)
+        if (circle >= 0)
         {
             var slots = RingDefaults.Create();
             if (args.Contains("--folder")) slots[2] = new() { Name = "Work tools", Kind = RingSlotKind.Folder, Children = CircleCatalog.Actions.Where(a => !a.NeedsConfiguration).Skip(8).Take(9).Select(a => a.Create()).ToList() };

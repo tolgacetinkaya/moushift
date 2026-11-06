@@ -1,3 +1,5 @@
+> Historical design: Teach a button was removed from the app in 0.14.10. Existing stored identities, positions and bindings remain compatible. The following describes the previous implementation.
+
 # Generic HID discovery and learning
 
 The implementation uses Windows SetupAPI/HID parser/Raw Input. It contains no device-model adapter for this feature, and sends no HID feature/output reports. Device names may be displayed for the user; names and VID/PID are not decoding rules.

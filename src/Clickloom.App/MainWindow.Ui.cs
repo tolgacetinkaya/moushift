@@ -91,9 +91,5 @@ public partial class MainWindow
         if (!CommitSettings(restore, "Ready")) throw new InvalidOperationException("UI profile cleanup failed.");
         PopulateProfiles(); RefreshBindings(MouseControl.XButton1); OpenEditor();
     }
-    private void FinishIdentification()
-    {
-        IdentifyButton.Content = "Teach a button…";
-    }
     private sealed record ProfileSummary(Guid Id, string Name, string Target, string Scope);
 }
