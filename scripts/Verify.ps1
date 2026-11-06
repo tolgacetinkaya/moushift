@@ -13,6 +13,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Windows tests failed.' }
     $env:CLICKLOOM_DATA_DIR = Join-Path $clickloomRoot '.local\verify-state'
     foreach ($circleTheme in @('light', 'dark')) {
+        dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-app-picker (Join-Path $clickloomRoot ('.local/app-picker-' + $circleTheme + '.png')) ('--theme=' + $circleTheme)
+        if ($LASTEXITCODE -ne 0) { throw 'Inline application picker verification failed.' }
         dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-circle (Join-Path $clickloomRoot ('docs\ui-010\' + $circleTheme + '-circle.png')) --verify-circle ('--theme=' + $circleTheme)
         if ($LASTEXITCODE -ne 0) { throw 'Offscreen circle verification failed.' }
         dotnet src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll --render-circle-editor (Join-Path $clickloomRoot ('docs\ui-011\editor-' + $circleTheme + '.png')) --verify-editor --folder ('--theme=' + $circleTheme)

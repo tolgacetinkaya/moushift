@@ -239,13 +239,13 @@
                       <TextBlock x:Name="DeviceHeading" Text="Mouse settings" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap"/>
 
                       <Grid x:Name="ProfileToolbar"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,20,0,0"><TextBlock Text="Application profile" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="ProfilesList" SelectionChanged="ProfilesList_SelectionChanged" DisplayMemberPath="Name" AutomationProperties.Name="Application profiles"/></StackPanel>
-                        <Button Grid.Column="1" Content="+" Click="AddProfile_Click" Style="{StaticResource Quiet}" FontSize="22" Margin="6,20,0,0" ToolTip="Add application profile" AutomationProperties.Name="Add application profile"/>
+                        <StackPanel Margin="0,20,0,0"><TextBlock Text="Settings for" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="ProfilesList" SelectionChanged="ProfilesList_SelectionChanged" DisplayMemberPath="Name" AutomationProperties.Name="Settings for application"/></StackPanel>
+                        <Button Grid.Column="1" Content="+ Add app" Click="AddProfile_Click" Margin="8,36,0,0" ToolTip="Create an app-specific Circle for this mouse" AutomationProperties.Name="Add app-specific Circle"/>
                       </Grid>
-                      <TextBlock x:Name="ProfileContext" Style="{StaticResource Caption}" FontSize="11" Margin="0,7,0,0" Visibility="Collapsed"/>
+                      <TextBlock x:Name="ProfileContext" Style="{StaticResource Caption}" FontSize="11" Margin="0,7,0,0"/>
                     </StackPanel>
                     <Border Grid.Row="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Margin="0,18,0,8">
-                      <StackPanel Orientation="Horizontal"><Button x:Name="MappingsNav" Content="Buttons" Style="{StaticResource ContextAction}" Click="MappingsNav_Click"/><Button x:Name="RingNav" Content="Click Circle" Style="{StaticResource ContextAction}" Click="CircleTab_Click" Margin="12,0,0,0"/></StackPanel>
+                      <StackPanel Orientation="Horizontal"><Button x:Name="MappingsNav" Content="Buttons" Style="{StaticResource ContextAction}" Click="MappingsNav_Click"/><Button x:Name="RingNav" Content="Edit Circle" Style="{StaticResource ContextAction}" Click="CircleTab_Click" Margin="12,0,0,0"/></StackPanel>
                     </Border>
                     <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
                       <StackPanel>

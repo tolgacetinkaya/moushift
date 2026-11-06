@@ -22,12 +22,22 @@ internal static class OffscreenPreview
         int devices = Array.IndexOf(args, "--render-devices"), setup = Array.IndexOf(args, "--render-setup");
         int settings = Array.IndexOf(args, "--render-settings");
         int editor = Array.IndexOf(args, "--render-circle-editor");
-        int index = circle >= 0 ? circle : reset >= 0 ? reset : workspace >= 0 ? workspace : devices >= 0 ? devices : setup >= 0 ? setup : editor >= 0 ? editor : settings;
+        int appPicker = Array.IndexOf(args, "--render-app-picker");
+        int index = appPicker >= 0 ? appPicker : circle >= 0 ? circle : reset >= 0 ? reset : workspace >= 0 ? workspace : devices >= 0 ? devices : setup >= 0 ? setup : editor >= 0 ? editor : settings;
         if (index < 0) return false;
         if (index + 1 >= args.Length) throw new ArgumentException("An output PNG path is required.");
         if (args.Contains("--verify-circle")) new RingWindow(RingDefaults.Create(), true).VerifyNoActivationAndSelection(false);
         Window window;
-        if (circle >= 0)
+        if (appPicker >= 0)
+        {
+            var view = new Window { Width = 1130, Height = 820, FontFamily = new("Segoe UI"), FontSize = 13 };
+            var picker = new ApplicationPicker(view, "Razer Basilisk V3 Pro", [@"C:\Apps\Chrome\chrome.exe"], true, (_, _) => { }, () => { },
+                [new("Adobe Photoshop", @"C:\Apps\Adobe\Photoshop.exe", "Installed app"), new("Google Chrome", @"C:\Apps\Chrome\chrome.exe", "Installed app"),
+                 new("Microsoft Excel", @"C:\Apps\Office\EXCEL.EXE", "Registered app"), new("Microsoft Visual Studio Code", @"C:\Apps\Code\Code.exe", "Installed app"),
+                 new("Spotify", @"C:\Apps\Spotify\Spotify.exe", "Windows app"), new("Windows utility", null, "Windows app")]);
+            picker.VerifySelection(); view.Content = picker; window = view;
+        }
+        else if (circle >= 0)
         {
             var slots = RingDefaults.Create();
             if (args.Contains("--folder")) slots[2] = new() { Name = "Work tools", Kind = RingSlotKind.Folder, Children = CircleCatalog.Actions.Where(a => !a.NeedsConfiguration).Skip(8).Take(9).Select(a => a.Create()).ToList() };

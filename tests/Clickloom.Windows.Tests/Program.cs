@@ -1,6 +1,15 @@
 using Clickloom.Core;
 using Clickloom.Windows;
 
+if (args.Contains("--application-discovery"))
+{
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+    var catalog = ApplicationCatalog.ScanAsync(timeout.Token).WaitAsync(timeout.Token).GetAwaiter().GetResult();
+    Console.WriteLine($"Read-only app discovery: {catalog.Applications.Count} apps, {catalog.Applications.Count(a => a.CanSelect)} executable targets, partial={catalog.Partial}.");
+    foreach (var group in catalog.Applications.GroupBy(a => a.Source)) Console.WriteLine($"{group.Key}: {group.Count()} ({group.Count(a => a.CanSelect)} selectable)");
+    return catalog.Applications.Count > 0 ? 0 : 1;
+}
+
 if (args.Contains("--learning-registration-check"))
     return LearningRegistrationProbe.Run(args[Array.IndexOf(args, "--learning-registration-check") + 1]);
 
@@ -58,6 +67,7 @@ if (args.Contains("--hid-inventory"))
 // by the native service, without starting hooks or injecting keyboard/mouse input.
 var tests = new (string Name, Action Run)[]
 {
+    ("application catalog rejects command lines and merges by executable identity", ApplicationCatalogChecks.Run),
     ("middle gate isolates Circle and native cycles for two mice", MiddleGateIsolation),
     ("middle gate preserves native holds across concurrent mice and pause", MiddleGateHolds),
     ("middle gate does not capture a cycle already in progress", MiddleGateActivation),
