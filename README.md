@@ -34,7 +34,7 @@ The app starts paused. With connected Raw Input sources it offers **Enable Circl
 
 ## Run
 
-Requires Windows and the .NET 10 Desktop Runtime (x64 for the portable build). Extract a release ZIP and run `Moushift.exe`. For a local source build, use `Start-Moushift.cmd` after building.
+Requires Windows 10/11 x64. The release ZIP includes the .NET and Windows Desktop runtimes: extract the complete folder and run `Moushift.exe`, without installing .NET separately. Keep all extracted files together. Source development requires the .NET 10 SDK; use `Start-Moushift.cmd` after a local build.
 
 1. Select your mouse connection in **Devices**.
 2. Open **Button positions → Teach a button…** in that mouse's inspector.
@@ -53,6 +53,8 @@ Install the .NET 10 SDK, then in PowerShell:
 ./scripts/Verify.ps1
 ./scripts/Package.ps1
 ```
+
+`Package.ps1` builds and verifies a self-contained Windows x64 ZIP. It runs the packaged executable offscreen with empty shared-runtime search roots and checks that app-local CoreCLR is used in both themes. `Build.ps1` keeps the regular development build; `Build.ps1 -SelfContained` produces the standalone publish output.
 
 The test suites run without starting hooks or injecting input. WPF checks render offscreen using isolated data. The optional read-only hardware inspection command is:
 

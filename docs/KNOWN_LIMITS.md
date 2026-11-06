@@ -10,4 +10,4 @@
 - Connection/receiver grouping cannot guarantee the identity or power state of each paired wireless mouse. Ambiguous identities never use a guessed last-active mouse.
 - Keyboard fallback accepts F13–F24 only from selected associated interfaces. Source-less injected keys are not treated as a known mouse.
 - Physical press/driver/OLE/multi-monitor acceptance across all devices is incomplete. Fixture and UI tests are reported separately from real-device results.
-- The portable package is framework-dependent, unsigned and requires the .NET 10 Desktop Runtime.
+- The Windows x64 portable ZIP includes its .NET/Windows Desktop runtime and does not require a separate .NET installation. It is an unsigned preview; keep the extracted runtime files beside the executable.

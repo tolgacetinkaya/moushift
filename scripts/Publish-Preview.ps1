@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Tag)
+param([Parameter(Mandatory)][string]$Tag, [string]$ExpectedDraftCommit = '')
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $Tag = $Tag -replace '^release/', ''
@@ -18,12 +18,19 @@ try {
     $expected = $hash + '  ' + (Split-Path $archive -Leaf)
     if ((Get-Content -LiteralPath $checksum -Raw).Trim() -ne $expected) { throw 'Archive checksum does not match.' }
 
-    # Only the same draft/source can be retried. Published releases are never changed.
+    # A source update requires the exact previous draft commit, not a blanket overwrite.
     $existingText = gh release view $Tag --repo $env:GH_REPO --json isDraft,targetCommitish,url,tagName 2>$null
     $exists = $LASTEXITCODE -eq 0
     if ($exists) {
         $existing = $existingText | ConvertFrom-Json
-        if (-not $existing.isDraft -or $existing.targetCommitish -ne $env:GITHUB_SHA) { throw 'Release already exists for another state; refusing to overwrite it.' }
+        if (-not $existing.isDraft) { throw 'Published releases are never overwritten.' }
+        if ($existing.targetCommitish -ne $env:GITHUB_SHA) {
+            if ($ExpectedDraftCommit -notmatch '^[0-9a-f]{40}$' -or $existing.targetCommitish -ne $ExpectedDraftCommit) { throw 'The draft source changed; refusing to overwrite it.' }
+            $tagText = gh api ('repos/' + $env:GH_REPO + '/git/ref/tags/' + $Tag) 2>$null
+            if ($LASTEXITCODE -eq 0 -and ($tagText | ConvertFrom-Json).object.sha -ne $env:GITHUB_SHA) { throw 'The tag already points elsewhere; use a new preview number.' }
+            gh release edit $Tag --repo $env:GH_REPO --target $env:GITHUB_SHA --draft --prerelease --title "Moushift $Tag" --notes-file $notes
+            if ($LASTEXITCODE -ne 0) { throw 'Draft source update failed.' }
+        }
     } else {
         gh release create $Tag --repo $env:GH_REPO --target $env:GITHUB_SHA --draft --prerelease --title "Moushift $Tag" --notes-file $notes
         if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }

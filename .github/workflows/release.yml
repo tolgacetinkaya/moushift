@@ -9,6 +9,10 @@ on:
         description: 'Preview tag, for example v0.14.1-preview.1'
         required: true
         type: string
+      expected_draft_commit:
+        description: 'Previous exact source SHA when replacing an unpublished draft'
+        required: false
+        type: string
 permissions:
   contents: write
 concurrency:
@@ -35,6 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          EXPECTED_DRAFT_COMMIT: ${{ inputs.expected_draft_commit || github.event.before }}
           GH_REPO: ${{ github.repository }}
         run: |
-          ./scripts/Publish-Preview.ps1 -Tag $env:RELEASE_TAG
+          ./scripts/Publish-Preview.ps1 -Tag $env:RELEASE_TAG -ExpectedDraftCommit $env:EXPECTED_DRAFT_COMMIT
