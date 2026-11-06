@@ -19,7 +19,7 @@ public partial class App : System.Windows.Application
         if (!preview) _instance = new Mutex(true, "Local\\Clickloom.Desktop", out first);
         if (!first)
         {
-            System.Windows.MessageBox.Show("Clickloom is already running. Open it from the C icon in the system tray.", "Clickloom");
+            System.Windows.MessageBox.Show("Moushift is already running. Open it from the system tray.", "Moushift");
             Shutdown(); return;
         }
         var window = new MainWindow(preview);

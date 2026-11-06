@@ -18,7 +18,7 @@ internal sealed class ResetButtonsWindow : Window
         root.Children.Add(new TextBlock { Text = "Restore default buttons?", FontSize = 23, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         var description = new StackPanel { Margin = new(0, 20, 0, 18) };
         description.Children.Add(new TextBlock { Text = profileName, Foreground = ThemeManager.Brush("Accent"), FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
-        description.Children.Add(new TextBlock { Text = "Mouse and F13–F24 assignments in this profile will return to normal. Clickloom will pause.\n\nYour Click Circle actions and other profiles stay saved.", Style = (Style)System.Windows.Application.Current.FindResource("Caption"), Margin = new(0, 10, 0, 0) });
+        description.Children.Add(new TextBlock { Text = "Mouse and F13–F24 assignments in this profile will return to normal. Moushift will pause.\n\nYour Click Circle actions and other profiles stay saved.", Style = (Style)System.Windows.Application.Current.FindResource("Caption"), Margin = new(0, 10, 0, 0) });
         Grid.SetRow(description, 1); root.Children.Add(description);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(new Button { Content = "Cancel", IsCancel = true, IsDefault = true, Margin = new(0, 0, 10, 0) });

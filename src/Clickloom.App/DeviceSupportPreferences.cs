@@ -27,7 +27,7 @@ internal static class DeviceSupportPreferences
             stream.Position = 0x3C; int offset = reader.ReadInt32();
             if (offset < 64 || offset > stream.Length - 6) throw new InvalidDataException("Invalid library header.");
             stream.Position = offset;
-            if (reader.ReadUInt32() != 0x00004550 || reader.ReadUInt16() != 0x8664) throw new InvalidDataException("Clickloom requires the x64 library.");
+            if (reader.ReadUInt32() != 0x00004550 || reader.ReadUInt16() != 0x8664) throw new InvalidDataException("Moushift requires the x64 library.");
         }
         Directory.CreateDirectory(folder);
         string path = Path.Combine(folder, "device-input.json"), temporary = path + ".tmp";

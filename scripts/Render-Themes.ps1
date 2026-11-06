@@ -6,7 +6,7 @@ Push-Location $clickloomRoot
 try {
     if (-not $NoBuild) { & (Join-Path $PSScriptRoot 'Build.ps1') -NoPublish }
     $env:CLICKLOOM_DATA_DIR = Join-Path $clickloomRoot '.local\theme-render-state-014'
-    $clickloomDll = Join-Path $clickloomRoot 'src\Clickloom.App\bin\Release\net10.0-windows\Clickloom.dll'
+    $clickloomDll = Join-Path $clickloomRoot 'src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll'
     foreach ($clickloomTheme in @('light', 'dark')) {
         foreach ($clickloomPage in @('workspace', 'devices', 'settings', 'setup', 'circle', 'reset-dialog')) {
             $clickloomOutput = Join-Path $clickloomRoot ('docs\ui-010\' + $clickloomTheme + '-' + $clickloomPage + '.png')

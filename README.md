@@ -1,4 +1,4 @@
-# Clickloom
+# Moushift
 
 A Windows mouse configuration workspace with per-connection profiles, an editable Click Circle, and generic HID button discovery and learning. Built with .NET 10 / WPF, without third-party NuGet packages.
 
@@ -34,7 +34,7 @@ The app starts paused. With connected Raw Input sources it offers **Enable Circl
 
 ## Run
 
-Requires Windows and the .NET 10 Desktop Runtime (x64 for the portable build). Extract a release ZIP and run `Clickloom.exe`. For a local source build, use `Start-Clickloom.cmd` after building.
+Requires Windows and the .NET 10 Desktop Runtime (x64 for the portable build). Extract a release ZIP and run `Moushift.exe`. For a local source build, use `Start-Moushift.cmd` after building.
 
 1. Select your mouse connection in **Devices**.
 2. Open **Button positions → Teach a button…** in that mouse's inspector.
@@ -64,7 +64,7 @@ Real device presses, OLE drag/drop smoothness, wireless receivers and live remap
 
 ## Data and privacy
 
-Settings remain in `%LOCALAPPDATA%/Clickloom/profiles.json`; appearance is separate. Development/tests use `CLICKLOOM_DATA_DIR`. The learning listener is temporary and restricted to interfaces associated with the selected connection. Ordinary keyboard typing is ignored; the dedicated keyboard fallback only accepts F13–F24. There is no telemetry or automatic upload of reports/profiles.
+Moushift was previously named Clickloom. To preserve existing assignments, profiles and themes without copying or resetting them, settings remain in `%LOCALAPPDATA%/Clickloom/profiles.json`; appearance is separate. Development/tests use `CLICKLOOM_DATA_DIR`. The learning listener is temporary and restricted to interfaces associated with the selected connection. Ordinary keyboard typing is ignored; the dedicated keyboard fallback only accepts F13–F24. There is no telemetry or automatic upload of reports/profiles.
 
 Do not attach personal profiles, device serials, raw device paths or unreviewed input captures to public issues. See [contributing](CONTRIBUTING.md), [learning design](docs/HID_LEARNING.md) and [known limits](docs/KNOWN_LIMITS.md).
 
@@ -72,4 +72,4 @@ Do not attach personal profiles, device serials, raw device paths or unreviewed 
 
 Issue forms cover bugs and undetected inputs. Pull requests run Windows build/tests/offscreen previews. Tagged releases run verification and produce a **draft prerelease**, including a portable ZIP and SHA-256 checksum; publishing is a separate maintainer action. CI and remote releases are not claimed to have run before the repository is published.
 
-See [release notes](docs/releases/v0.12.0-preview.1.md). Proposed license: [MIT](LICENSE).
+See [release notes](docs/releases/v0.14.1-preview.md). License: [MIT](LICENSE).

@@ -11,7 +11,7 @@ public partial class MainWindow
     {
         var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Choose an installed x64 input library", Filter = "Interception library (interception.dll)|interception.dll", CheckFileExists = true };
         if (dialog.ShowDialog(this) != true) return;
-        try { DeviceSupportPreferences.Save(System.IO.Path.GetDirectoryName(_store.FilePath)!, dialog.FileName); StatusText.Text = "Input library saved. Quit and reopen Clickloom to connect it."; }
+        try { DeviceSupportPreferences.Save(System.IO.Path.GetDirectoryName(_store.FilePath)!, dialog.FileName); StatusText.Text = "Input library saved. Quit and reopen Moushift to connect it."; }
         catch (Exception error) { StatusText.Text = error.Message; }
     }
     private void UpdateSetupStatus()

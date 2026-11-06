@@ -96,7 +96,7 @@ internal sealed class HidLearningWindow : Window
         if (!_position || _closed) return;
         if (_begin is null) { _status.Text = "Input observation is unavailable in this preview."; return; }
         _identity = null; _save.IsEnabled = false; _session = new(_connection.Key, Environment.TickCount64 + 350); _expires = Environment.TickCount64 + 25000;
-        try { _capture = _begin(_endpoints, Observe, message => { if (!_closed) _status.Text = message; }); _listen.Content = "Listening… Cancel"; _status.Text = "Press the same button twice. Clickloom does not block its original function."; _timer.Start(); }
+        try { _capture = _begin(_endpoints, Observe, message => { if (!_closed) _status.Text = message; }); _listen.Content = "Listening… Cancel"; _status.Text = "Press the same button twice. Moushift does not block its original function."; _timer.Start(); }
         catch (Exception e) { Stop("Cannot start input learning: " + e.Message); }
     }
     private void Observe(ObservedControl signal)

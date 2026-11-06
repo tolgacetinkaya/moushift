@@ -6,7 +6,7 @@ Push-Location $clickloomRoot
 try {
     if (-not $NoBuild) { & (Join-Path $PSScriptRoot 'Build.ps1') -NoPublish }
     $env:CLICKLOOM_DATA_DIR = Join-Path $clickloomRoot '.local\ui-review-state'
-    $clickloomDll = Join-Path $clickloomRoot 'src\Clickloom.App\bin\Release\net10.0-windows\Clickloom.dll'
+    $clickloomDll = Join-Path $clickloomRoot 'src\Clickloom.App\bin\Release\net10.0-windows\Moushift.dll'
     $clickloomOutput = Join-Path $clickloomRoot 'docs\ui-05'
     New-Item -ItemType Directory -Path $clickloomOutput -Force | Out-Null
     dotnet $clickloomDll --render-preview (Join-Path $clickloomRoot 'docs\clickloom-preview.png') --verify-ui

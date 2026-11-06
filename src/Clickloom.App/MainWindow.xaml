@@ -1,4 +1,4 @@
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:local="clr-namespace:Clickloom.App" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Clickloom.App.MainWindow" Title="Clickloom" Width="1440" Height="1024" MinWidth="1100" MinHeight="760" WindowStyle="None" WindowStartupLocation="CenterScreen" Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="14" Loaded="Layout_Loaded" SizeChanged="Layout_SizeChanged">
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:local="clr-namespace:Clickloom.App" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Clickloom.App.MainWindow" Title="Moushift" Width="1440" Height="1024" MinWidth="1100" MinHeight="760" WindowStyle="None" WindowStartupLocation="CenterScreen" Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="14" Loaded="Layout_Loaded" SizeChanged="Layout_SizeChanged">
   <shell:WindowChrome.WindowChrome>
     <shell:WindowChrome CaptionHeight="64" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
   </shell:WindowChrome.WindowChrome>
@@ -86,7 +86,7 @@
       </Grid.ColumnDefinitions>
       <Border x:Name="ThemeTitleBar" Grid.ColumnSpan="2" Background="{DynamicResource Metal}" BorderBrush="{DynamicResource MetalEdge}" BorderThickness="0,0,0,1">
         <Grid>
-          <TextBlock Text="Clickloom" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="28,0"/>
+          <TextBlock Text="Moushift" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="28,0"/>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <TextBlock x:Name="EngineBadge" Text="Paused" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,0,16,0"/>
             <Button x:Name="EnableButton" Content="Enable Circle" Click="Enable_Click" MinWidth="104" Margin="0,0,25,0" BorderBrush="{DynamicResource Ink}"/>
@@ -411,7 +411,7 @@
             <Border Style="{StaticResource Surface}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Margin="0,0,70,0"><TextBlock Text="Device input support" FontWeight="SemiBold"/><TextBlock Text="Driverless Circle · optional exclusive remapping" Style="{StaticResource Caption}" Margin="0,6,0,0"/></StackPanel><TextBlock x:Name="SetupBackendState" Grid.Column="1" Text="Checking input" Foreground="{DynamicResource Muted}"/></Grid></Border>
             <ItemsControl x:Name="SetupConnectionRows" Margin="0,18,0,20"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="16,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Margin="0,0,30,0"/><TextBlock Text="{Binding Routing}" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="12"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
             <StackPanel Orientation="Horizontal"><Button Content="Setup details" Click="SetupGuide_Click"/><Button Content="Use existing installation…" Click="SelectInputLibrary_Click" Style="{StaticResource Quiet}" Margin="12,0,0,0"/></StackPanel>
-            <Expander x:Name="SetupGuideExpander" Header="How device support works" Margin="0,20,0,0"><TextBlock Text="Driverless Click Circle uses Windows Raw Input to identify the exact mouse. Assign Click Circle to one of its five standard buttons, press Enable Circle, then test outside the editor. The original click still reaches the other application. Click a Circle action to run it.&#10;&#10;Other button assignments, wheel triggers and custom HID assignment drafts are not activated by this mode. Exclusive remapping uses the optional device input backend. Clickloom never guesses a source from the last mouse moved and never installs a driver automatically." Style="{StaticResource Caption}" Margin="4,12,0,0" MaxWidth="680"/></Expander>
+            <Expander x:Name="SetupGuideExpander" Header="How device support works" Margin="0,20,0,0"><TextBlock Text="Driverless Click Circle uses Windows Raw Input to identify the exact mouse. Assign Click Circle to one of its five standard buttons, press Enable Circle, then test outside the editor. The original click still reaches the other application. Click a Circle action to run it.&#10;&#10;Other button assignments, wheel triggers and custom HID assignment drafts are not activated by this mode. Exclusive remapping uses the optional device input backend. Moushift never guesses a source from the last mouse moved and never installs a driver automatically." Style="{StaticResource Caption}" Margin="4,12,0,0" MaxWidth="680"/></Expander>
           </StackPanel></ScrollViewer>
           <ScrollViewer x:Name="AppearancePage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32">
             <StackPanel MaxWidth="880" HorizontalAlignment="Left">
@@ -427,7 +427,7 @@
           </ScrollViewer>
           <ScrollViewer x:Name="AboutPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32">
             <StackPanel MaxWidth="1160" HorizontalAlignment="Stretch">
-              <TextBlock Text="Get started with Clickloom" FontSize="27" FontWeight="SemiBold" />
+              <TextBlock Text="Get started with Moushift" FontSize="27" FontWeight="SemiBold" />
               <TextBlock Text="Choose buttons, save actions, and enable your assignments." Style="{StaticResource Caption}" Margin="0,9,0,25" />
               <Grid>
                 <Grid.ColumnDefinitions>
@@ -464,8 +464,8 @@
               <Border Style="{StaticResource Surface}" Margin="0,22,0,0">
                 <StackPanel>
                   <TextBlock Text="Local data" FontSize="19" FontWeight="SemiBold" />
-                  <TextBlock Text="Profiles are saved locally for this Windows account. Elevated applications may require Clickloom to run with matching permissions." Style="{StaticResource Caption}" Margin="0,13,0,18" />
-                  <StackPanel Orientation="Horizontal"><Button Content="Open profile folder" Click="OpenSettingsFolder_Click"/><Button Content="Quit Clickloom" Click="Quit_Click" Margin="12,0,0,0"/></StackPanel>
+                  <TextBlock Text="Profiles are saved locally for this Windows account. Elevated applications may require Moushift to run with matching permissions." Style="{StaticResource Caption}" Margin="0,13,0,18" />
+                  <StackPanel Orientation="Horizontal"><Button Content="Open profile folder" Click="OpenSettingsFolder_Click"/><Button Content="Quit Moushift" Click="Quit_Click" Margin="12,0,0,0"/></StackPanel>
                   <Expander Header="Windows input details" Margin="0,22,0,0">
                     <ListBox x:Name="DevicesList" MaxHeight="240" Margin="0,12,0,0" AutomationProperties.Name="Windows mouse inputs">
                       <ListBox.ItemTemplate>
@@ -480,7 +480,7 @@
                   </Expander>
                 </StackPanel>
               </Border>
-              <TextBlock x:Name="AboutVersionText" Text="Clickloom · Windows" Style="{StaticResource Caption}" Margin="0,24,0,8" />
+              <TextBlock x:Name="AboutVersionText" Text="Moushift · Windows" Style="{StaticResource Caption}" Margin="0,24,0,8" />
             </StackPanel>
           </ScrollViewer>
         </Grid>

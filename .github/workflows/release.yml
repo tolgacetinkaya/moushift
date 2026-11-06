@@ -28,5 +28,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$') { throw 'Invalid release tag.' }
-          gh release create $env:RELEASE_TAG artifacts/release/*.zip artifacts/release/SHA256SUMS.txt --verify-tag --draft --prerelease --title "Clickloom $env:RELEASE_TAG" --notes-file docs/releases/v0.12.0-preview.1.md
+          $project = [xml](Get-Content src/Clickloom.App/Clickloom.App.csproj -Raw)
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ($env:RELEASE_TAG -notmatch ('^v' + [regex]::Escape($version) + '($|-)')) { throw 'Tag and app version differ.' }
+          $notes = 'docs/releases/v' + $version + '-preview.md'
+          if (-not (Test-Path -LiteralPath $notes)) { throw 'Release notes are missing.' }
+          gh release create $env:RELEASE_TAG artifacts/release/*.zip artifacts/release/SHA256SUMS.txt --verify-tag --draft --prerelease --title "Moushift $env:RELEASE_TAG" --notes-file $notes
           if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }

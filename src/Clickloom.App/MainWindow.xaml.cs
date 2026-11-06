@@ -49,7 +49,7 @@ public partial class MainWindow : Window
     {
         _previewOnly = previewOnly;
         InitializeComponent();
-        Title = "Clickloom · " + typeof(MainWindow).Assembly.GetName().Version?.ToString(3);
+        Title = "Moushift · " + typeof(MainWindow).Assembly.GetName().Version?.ToString(3);
         AboutVersionText.Text = Title + " · Windows";
         ThemeCombo.ItemsSource = ThemeManager.Choices; ThemeCombo.SelectedValue = ThemeManager.Current;
         DiagramLinks.Configure(HeroMouse, (MouseControl.LeftButton, LeftCallout), (MouseControl.RightButton, RightCallout),
@@ -604,7 +604,7 @@ public partial class MainWindow : Window
             if (_tray is not null && DateTime.UtcNow - _lastErrorShown > TimeSpan.FromSeconds(15))
             {
                 _lastErrorShown = DateTime.UtcNow;
-                _tray.ShowBalloonTip(4500, "Clickloom · Action failed", error, System.Windows.Forms.ToolTipIcon.Warning);
+                _tray.ShowBalloonTip(4500, "Moushift · Action failed", error, System.Windows.Forms.ToolTipIcon.Warning);
             }
         });
     }
@@ -636,7 +636,7 @@ public partial class MainWindow : Window
             EmergencyShortcutLabel.Text = _service.EmergencyShortcut.Replace("+", " + ");
             EmergencyHelp.Text = _service.EmergencyShortcut + " pauses assignments. Standard mouse actions pause inside the editor. Closing minimizes to the system tray; choose Quit to exit.";
         }
-        if (_tray is not null) _tray.Text = !_service.CanEnable ? "Clickloom · Waiting for mouse" : enabled ? _service.DriverlessCircleMode ? "Clickloom · Driverless Circle enabled" : "Clickloom · Assignments enabled" : "Clickloom · Paused";
+        if (_tray is not null) _tray.Text = !_service.CanEnable ? "Moushift · Waiting for mouse" : enabled ? _service.DriverlessCircleMode ? "Moushift · Driverless Circle enabled" : "Moushift · Assignments enabled" : "Moushift · Paused";
         if (_trayToggle is not null) { _trayToggle.Text = !_service.CanEnable ? "Input status" : enabled ? "Pause" : _service.DriverlessCircleMode ? "Enable Click Circle" : "Enable assignments"; _trayToggle.Enabled = _service.IsRunning; }
         if (!string.IsNullOrWhiteSpace(_service.LastError)) StatusText.Text = _service.LastError;
         string inputStatus = _service.InputStatus;
@@ -858,13 +858,13 @@ public partial class MainWindow : Window
         try { using var temporary = System.Drawing.Icon.FromHandle(icon); _trayIcon = (System.Drawing.Icon)temporary.Clone(); }
         finally { DestroyIcon(icon); }
         var menu = new System.Windows.Forms.ContextMenuStrip();
-        menu.Items.Add("Open Clickloom", null, (_, _) => Dispatcher.Invoke(ShowFromTray));
+        menu.Items.Add("Open Moushift", null, (_, _) => Dispatcher.Invoke(ShowFromTray));
         _trayToggle = new System.Windows.Forms.ToolStripMenuItem("Enable assignments") { Enabled = false };
         _trayToggle.Click += (_, _) => Dispatcher.Invoke(() => Enable_Click(this, new RoutedEventArgs()));
         menu.Items.Add(_trayToggle);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => Dispatcher.Invoke(ExitApp));
-        _tray = new System.Windows.Forms.NotifyIcon { Icon = _trayIcon, Text = "Clickloom · Paused", Visible = true, ContextMenuStrip = menu };
+        _tray = new System.Windows.Forms.NotifyIcon { Icon = _trayIcon, Text = "Moushift · Paused", Visible = true, ContextMenuStrip = menu };
         _tray.DoubleClick += (_, _) => Dispatcher.Invoke(ShowFromTray);
     }
     private void ShowFromTray() { Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
@@ -873,7 +873,7 @@ public partial class MainWindow : Window
         if (_exiting) return;
         if (_previewOnly) { _exiting = true; DisposeRuntime(); System.Windows.Application.Current.Shutdown(); return; }
         e.Cancel = true; Hide();
-        _tray?.ShowBalloonTip(2500, "Clickloom is still running", "Choose Quit in the tray menu to close Clickloom completely.", System.Windows.Forms.ToolTipIcon.Info);
+        _tray?.ShowBalloonTip(2500, "Moushift is still running", "Choose Quit in the tray menu to close Clickloom completely.", System.Windows.Forms.ToolTipIcon.Info);
     }
     private void ExitApp() { _exiting = true; DisposeRuntime(); Close(); System.Windows.Application.Current.Shutdown(); }
     private void DisposeRuntime()

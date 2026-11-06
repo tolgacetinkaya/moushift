@@ -7,10 +7,10 @@ try {
     $project = [xml](Get-Content -LiteralPath 'src/Clickloom.App/Clickloom.App.csproj' -Raw)
     $version = [string]$project.Project.PropertyGroup.Version
     if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid package version.' }
-    $binaryRoot = Join-Path 'artifacts' ('Clickloom-' + $version)
-    $payload = Join-Path '.local/package' ([guid]::NewGuid().ToString('N') + '/Clickloom-' + $version)
+    $binaryRoot = Join-Path 'artifacts' ('Moushift-' + $version)
+    $payload = Join-Path '.local/package' ([guid]::NewGuid().ToString('N') + '/Moushift-' + $version)
     New-Item -ItemType Directory -Path $payload -Force | Out-Null
-    foreach ($name in @('Clickloom.exe','Clickloom.dll','Clickloom.Core.dll','Clickloom.Windows.dll','Clickloom.deps.json','Clickloom.runtimeconfig.json')) {
+    foreach ($name in @('Moushift.exe','Moushift.dll','Clickloom.Core.dll','Clickloom.Windows.dll','Moushift.deps.json','Moushift.runtimeconfig.json')) {
         $source = Join-Path $binaryRoot $name
         if (-not (Test-Path -LiteralPath $source)) { throw "Missing release file: $name" }
         Copy-Item -LiteralPath $source -Destination $payload
@@ -21,7 +21,7 @@ try {
     Copy-Item -LiteralPath 'docs/DRIVERLESS_CIRCLE.md' -Destination (Join-Path $payload 'DRIVERLESS_CIRCLE.md')
     $output = Join-Path $packageRoot 'artifacts/release'
     New-Item -ItemType Directory -Path $output -Force | Out-Null
-    $archive = Join-Path $output ('Clickloom-' + $version + '-win-x64.zip')
+    $archive = Join-Path $output ('Moushift-' + $version + '-win-x64.zip')
     Compress-Archive -LiteralPath $payload -DestinationPath $archive -Force
     $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText((Join-Path $output 'SHA256SUMS.txt'), $hash + '  ' + (Split-Path $archive -Leaf) + "`n")
