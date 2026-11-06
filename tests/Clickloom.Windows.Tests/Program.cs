@@ -58,6 +58,7 @@ if (args.Contains("--hid-inventory"))
 // by the native service, without starting hooks or injecting keyboard/mouse input.
 var tests = new (string Name, Action Run)[]
 {
+    ("horizontal tilt resolves exact source, accumulates detents and coalesces repeats", RawCircleHorizontalWheel),
     ("driverless Circle uses exact input source and executes only Circle bindings", RawCircleIsolation),
     ("driverless Circle resolves application and manual Circle profiles", RawCircleProfiles),
     ("driverless Circle retains press ownership across pause and connection refresh", RawCircleLifecycle),
@@ -119,6 +120,42 @@ foreach (var (name, run) in tests)
 }
 Console.WriteLine($"{tests.Length - failures}/{tests.Length} passed; no hooks started or input injected.");
 return failures == 0 ? 0 : 1;
+
+static void RawCircleHorizontalWheel()
+{
+    Require(RawMouseActivity.DecodeHorizontalWheel(0x800, 120) == 120, "Right delta lost.");
+    Require(RawMouseActivity.DecodeHorizontalWheel(0x800, unchecked((ushort)-120)) == -120, "Signed left delta lost.");
+    Require(RawMouseActivity.DecodeHorizontalWheel(0x400, 120) is null && RawMouseActivity.DecodeHorizontalWheel(0x800, 0) is null, "Vertical or zero packet became horizontal tilt.");
+    var settings = AppSettings.CreateDefault();
+    var profile = ProfileResolver.CreateDeviceDefault("a", "A");
+    foreach (var input in new[] { MouseControl.WheelLeft, MouseControl.WheelRight })
+        profile.Bindings.Single(b => b.Input == input).Action = new() { Kind = ActionKind.Ring };
+    settings.Profiles.Add(profile);
+    var app = profile.DeepClone(); app.Id = Guid.NewGuid(); app.ApplicationPath = @"C:\test\editor.exe";
+    app.Bindings.Single(b => b.Input == MouseControl.WheelLeft).Action = new() { Kind = ActionKind.Disabled };
+    settings.Profiles.Add(app);
+    var router = new RawCircleRouter();
+    var connection = new MouseConnection("a", "A", "TEST", "USB", true, false, ["path"]);
+    router.Update([connection, connection with { Key = "b", DevicePaths = ["other"] }]);
+    Require(router.Wheel(settings, "unknown", 120, true, null, 0) is null, "Unknown source triggered.");
+    Require(router.Wheel(settings, "other", 120, true, null, 0) is null, "Another mouse inherited tilt assignment.");
+    Require(router.Wheel(settings, "path", 60, true, null, 0) is null, "Fractional wheel packet triggered early.");
+    Require(router.Wheel(settings, "PATH", 60, true, null, 10)?.Id == profile.Id, "Accumulated right tilt failed.");
+    Require(router.Wheel(settings, "path", 120, true, null, 80) is null, "Held tilt repeated.");
+    Require(router.Wheel(settings, "path", -120, true, null, 100)?.Id == profile.Id, "Opposite direction lost.");
+    Require(router.Wheel(settings, "path", -120, true, app.ApplicationPath, 500) is null, "Disabled application override ignored.");
+    Require(router.Wheel(settings, "path", 60, true, null, 900) is null, "Fractional input triggered.");
+    Require(router.Wheel(settings, "path", 60, true, app.ApplicationPath, 910) is null, "Partial gesture crossed foreground scope.");
+    Require(router.Wheel(settings, "path", 120, false, null, 1400) is null, "Paused input triggered.");
+    Require(router.Wheel(settings, "path", 120, true, null, 1410) is null, "Enable mid-gesture triggered.");
+    Require(router.Wheel(settings, "path", 120, true, null, 1800) is not null, "Fresh tilt did not reopen.");
+    router.Update([]);
+    Require(router.Wheel(settings, "path", 120, true, null, 2200) is null, "Removed source triggered.");
+    router.Update([connection]);
+    Require(router.Wheel(settings, "path", 120, true, null, 2210) is not null, "Reconnect retained stale burst.");
+    Require(RingActionSelection.ForwardOriginalWheel(true, true), "Tilt hook can close its own raw-triggered Circle.");
+    Require(!RingActionSelection.ForwardOriginalWheel(true, false) && !RingActionSelection.ForwardOriginalWheel(false, true), "Wheel ownership changed outside driverless tilt.");
+}
 
 static void RawCircleIsolation()
 {

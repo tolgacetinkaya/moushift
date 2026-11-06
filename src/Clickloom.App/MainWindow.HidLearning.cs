@@ -23,6 +23,7 @@ public partial class MainWindow
                 return _deviceActivity.BeginCapture(new WindowInteropHelper(this).Handle, current, endpoints, observed, status);
             };
         _learningEditor = new HidLearningWindow(connection, _settings.LearnedControls, begin);
+        _learningEditor.SelectView(HeroMouse.View);
         MountLearningWorkspace(connection);
     }
     private HidLearningWindow? _learningEditor;
@@ -49,6 +50,8 @@ public partial class MainWindow
         var next = LearnedControls.Save(_settings, control);
         if (!CommitSettings(next, "Learned input and position saved for this mouse. Assignments remain paused.")) return;
         CloseLearningWorkspace();
+        if (control.View == MouseDrawingView.Left) LeftViewButton.IsChecked = true;
+        else TopViewButton.IsChecked = true;
         RefreshBindings(control.Identity.StandardControl);
         if (control.Identity.StandardControl is null)
         {
@@ -68,13 +71,13 @@ public partial class MainWindow
     {
         foreach (var marker in _learnedMarkers) MarkerCanvas.Children.Remove(marker); _learnedMarkers.Clear();
         string? key = EditingProfile.DeviceKey;
-        foreach (var control in _settings.LearnedControls.Where(c => c.DeviceKey == key))
+        foreach (var control in _settings.LearnedControls.Where(c => c.DeviceKey == key && c.View == HeroMouse.View))
         {
             var point = HeroMouse.TranslatePoint(HeroMouse.NormalizedAnchor(control.X, control.Y), MarkerCanvas);
             if (control.Identity.StandardControl is { } standard)
             {
                 var button = standard switch { MouseControl.LeftButton => LeftCallout, MouseControl.RightButton => RightCallout, MouseControl.MiddleButton => MiddleCallout, MouseControl.XButton1 => BackCallout, MouseControl.XButton2 => ForwardCallout, _ => null };
-                if (button is not null) { Canvas.SetLeft(button, point.X - 13); Canvas.SetTop(button, point.Y - 13); button.ToolTip = control.Name; continue; }
+                if (button is not null) { button.Visibility = Visibility.Visible; Canvas.SetLeft(button, point.X - 13); Canvas.SetTop(button, point.Y - 13); button.ToolTip = control.Name; continue; }
             }
             var marker = new Button { Content = "+", Width = 26, Height = 26, Padding = new(0), Style = (Style)FindResource("Marker"), ToolTip = control.Name + " · Learned input", Tag = control.Id };
             System.Windows.Automation.AutomationProperties.SetName(marker, control.Name);

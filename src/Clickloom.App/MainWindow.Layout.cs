@@ -38,7 +38,8 @@ public partial class MainWindow
         // Action forms never determine the size of the artwork.
         DiagramStage.Height = Math.Clamp(height - 370, 300, 580);
         BindingsList.Height = double.NaN;
-        HeroMouse.MaxWidth = 400; HeroMouse.MaxHeight = 500;
+        HeroMouse.MaxWidth = HeroMouse.View == MouseDrawingView.Left ? 620 : 400; HeroMouse.MaxHeight = 500;
+        DiagramStage.MaxWidth = HeroMouse.View == MouseDrawingView.Left ? 660 : 440;
         EditorPane.Padding = new Thickness(0, 18, 0, 0);
         PlaceMarkers();
     }
@@ -46,11 +47,22 @@ public partial class MainWindow
     {
         foreach (var (control, marker) in new[] { (MouseControl.LeftButton, LeftCallout), (MouseControl.RightButton, RightCallout), (MouseControl.MiddleButton, MiddleCallout), (MouseControl.XButton2, ForwardCallout), (MouseControl.XButton1, BackCallout) })
         {
+            marker.Visibility = HeroMouse.View == MouseDrawingView.Left && control is MouseControl.LeftButton or MouseControl.RightButton
+                ? Visibility.Collapsed : Visibility.Visible;
             var point = HeroMouse.TranslatePoint(HeroMouse.Anchor(control), MarkerCanvas);
             Canvas.SetLeft(marker, point.X - 13); Canvas.SetTop(marker, point.Y - 13);
             marker.ToolTip = InputPresentation.Name(control);
         }
         PlaceLearnedMarkers();
+    }
+    private void MouseView_Changed(object sender, RoutedEventArgs e)
+    {
+        if (HeroMouse is null || MarkerCanvas is null) return;
+        HeroMouse.View = LeftViewButton?.IsChecked == true ? MouseDrawingView.Left : MouseDrawingView.Top;
+        HeroMouse.MaxWidth = HeroMouse.View == MouseDrawingView.Left ? 620 : 400;
+        DiagramStage.MaxWidth = HeroMouse.View == MouseDrawingView.Left ? 660 : 440;
+        HeroMouse.UpdateLayout();
+        PlaceMarkers();
     }
     internal void PrepareOffscreenWorkspace()
     {

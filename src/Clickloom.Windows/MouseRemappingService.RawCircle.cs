@@ -35,6 +35,15 @@ public sealed partial class MouseRemappingService
     }
 
     public void ObserveRawMouseButton(RawMouseButtonEvent input)
+        => ObserveRawCircleInput(input, null);
+
+    public void ObserveRawMouseWheel(RawMouseWheelEvent input)
+    {
+        if (input.Delta == 0) return;
+        ObserveRawCircleInput(new(input.DevicePath, input.Delta > 0 ? MouseControl.WheelRight : MouseControl.WheelLeft, true), input.Delta);
+    }
+
+    private void ObserveRawCircleInput(RawMouseButtonEvent input, short? wheelDelta)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!_rawInputReady || HasDeviceRouting) return;
@@ -51,8 +60,10 @@ public sealed partial class MouseRemappingService
                 string? key = _rawCircles.DeviceKey(input.DevicePath);
                 TraceCircle("raw", _settings.Profiles.FirstOrDefault(p => p.DeviceKey == key && p.ApplicationPath is null)?.DeviceName ?? "Unassigned/unknown mouse", input.Control.ToString(), input.Pressed);
             }
-            profile = _rawCircles.Press(_settings, input.DevicePath, input.Control, input.Pressed,
-                ready && !IsRingOpen, snapshot.ApplicationPath);
+            if (wheelDelta.HasValue && _rawCircles.DeviceKey(input.DevicePath) is not null) Observe(input.Control);
+            profile = wheelDelta is { } delta
+                ? _rawCircles.Wheel(_settings, input.DevicePath, delta, ready && !IsRingOpen, snapshot.ApplicationPath, Environment.TickCount64)
+                : _rawCircles.Press(_settings, input.DevicePath, input.Control, input.Pressed, ready && !IsRingOpen, snapshot.ApplicationPath);
         }
         if (profile is null) return;
         if (!Enqueue(new(new InputAction { Kind = ActionKind.Ring }, false, false, Interlocked.Increment(ref _token),

@@ -26,4 +26,5 @@ internal static class RingActionSelection
     // Raw Input and WH_MOUSE_LL have no guaranteed cross-thread delivery order.
     // A non-left original button must not dismiss the Circle it just opened through Raw Input.
     public static bool ForwardOriginalButton(bool driverless, MouseControl control) => driverless && control != MouseControl.LeftButton;
+    public static bool ForwardOriginalWheel(bool driverless, bool horizontal) => driverless && horizontal;
 }

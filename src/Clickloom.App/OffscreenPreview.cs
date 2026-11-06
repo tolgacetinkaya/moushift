@@ -11,6 +11,11 @@ internal static class OffscreenPreview
 {
     internal static bool Run(string[] args)
     {
+        int brand = Array.IndexOf(args, "--export-brand-assets");
+        if (brand >= 0)
+        {
+            BrandMark.Export(args[brand + 1]); return true;
+        }
         int circle = Array.IndexOf(args, "--render-circle");
         int reset = Array.IndexOf(args, "--render-reset-dialog");
         int workspace = Array.IndexOf(args, "--render-workspace");

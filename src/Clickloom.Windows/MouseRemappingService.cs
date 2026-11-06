@@ -490,6 +490,9 @@ public sealed partial class MouseRemappingService : IDisposable
             {
                 if (IsRingOpen)
                 {
+                    // Raw Input can open the overlay before the matching low-level hook packet arrives.
+                    if (RingActionSelection.ForwardOriginalWheel(Volatile.Read(ref _ringRequest)?.Driverless == true, message == 0x20E))
+                        return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam);
                     var bounds = Volatile.Read(ref _ringBounds);
                     bool inside = bounds.Right > bounds.Left && data.Point.X >= bounds.Left && data.Point.X < bounds.Right && data.Point.Y >= bounds.Top && data.Point.Y < bounds.Bottom;
                     if (Volatile.Read(ref _ringRequest)?.Driverless == true && !inside)

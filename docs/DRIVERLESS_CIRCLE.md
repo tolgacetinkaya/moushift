@@ -1,15 +1,15 @@
 # Driverless Click Circle on Windows
 
-The standard-button Circle trigger uses built-in Windows Raw Input and the existing non-activating Circle overlay. It needs no downloaded package, Interception library, kernel driver, device firmware write, or manufacturer-specific adapter.
+The standard-button and horizontal-wheel Circle trigger uses built-in Windows Raw Input and the existing non-activating Circle overlay. It needs no downloaded package, Interception library, kernel driver, device firmware write, or manufacturer-specific adapter.
 
 ## Use
 
-1. Select a connected mouse, assign Click Circle to a standard button, and Apply. Existing Circle assignments are reused.
+1. Select a connected mouse, assign Click Circle to a standard button or horizontal wheel direction, and Apply. Existing Circle assignments are reused.
 2. Click Enable Circle. The app always starts paused.
 3. Switch to another application and press that physical mouse button once.
 4. Click a Circle action or folder; click outside to dismiss. Hold-to-release selection is reserved for exclusive input support.
 
-Only the five standard mouse buttons can trigger this mode. The original trigger also reaches Windows: a middle-button trigger can still start the foreground application's autoscroll, for example. Ordinary button remaps, wheel triggers, anonymous F13–F24 keys, and learned custom HID assignment drafts are not activated by Enable Circle.
+The five standard mouse buttons and standard horizontal wheel directions can trigger this mode. The original trigger also reaches Windows: a middle-button trigger can still start the foreground application's autoscroll, for example. Ordinary button remaps, vertical wheel triggers, anonymous F13–F24 keys, and learned custom HID assignment drafts are not activated by Enable Circle.
 
 ## Input and profile isolation
 
@@ -35,3 +35,5 @@ For physical validation, use one intentional left click and one middle click sep
 Left/right triggers retain their original application focus/context-menu effects and may therefore cancel the Circle through a real foreground change. Middle or side buttons are recommended for the first physical tests. Per-mouse identification does not remove these original effects.
 
 The optional exclusive remapping setup guide is separate: [INPUT_SUPPORT_SETUP.md](INPUT_SUPPORT_SETUP.md).
+
+Horizontal wheel deltas are accumulated to 120 and same-direction repeats are grouped using a 300 ms quiet interval. Original horizontal scrolling remains. See [the suppression comparison](INPUT_SUPPRESSION_RESEARCH.md) for implementation details and limitations.

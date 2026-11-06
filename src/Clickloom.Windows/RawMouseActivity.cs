@@ -12,6 +12,7 @@ public sealed class RawMouseActivity : IDisposable
     private HidInputCapture? _capture;
     public event EventHandler<string>? Observed;
     public event EventHandler<RawMouseButtonEvent>? ButtonObserved;
+    public event EventHandler<RawMouseWheelEvent>? WheelObserved;
     public RawMouseActivity(nint window)
     {
         var devices = new[] { new RawRegistration { UsagePage = 1, Usage = 2, Flags = 0x2100, Window = window } };
@@ -52,6 +53,8 @@ public sealed class RawMouseActivity : IDisposable
             // Button events must precede activity throttling: a click immediately after movement is still a click.
             foreach (var transition in DecodeButtons(packet.Mouse.ButtonFlags))
                 ButtonObserved?.Invoke(this, new(path, transition.Control, transition.Pressed));
+            if (DecodeHorizontalWheel(packet.Mouse.ButtonFlags, packet.Mouse.ButtonData) is { } delta)
+                WheelObserved?.Invoke(this, new(path, delta));
         }
         DateTime now = DateTime.UtcNow;
         if (_reported.TryGetValue(header.Device, out var last) && now - last < TimeSpan.FromMilliseconds(500)) return;
@@ -67,6 +70,8 @@ public sealed class RawMouseActivity : IDisposable
                 if ((flags & (1 << (button * 2 + edge))) != 0) transitions.Add(((MouseControl)button, edge == 0));
         return transitions;
     }
+    internal static short? DecodeHorizontalWheel(ushort flags, ushort data)
+        => (flags & 0x800) != 0 && data != 0 ? unchecked((short)data) : null;
     [StructLayout(LayoutKind.Sequential)] internal struct RawMousePayload
     {
         public ushort Flags, Padding, ButtonFlags, ButtonData;

@@ -21,6 +21,7 @@ public sealed class HidInputCapture : IDisposable
     public int RegisteredCollections => _extra.Count + 1;
     public bool IsDisposed => _disposed;
     public string? StopReason { get; private set; }
+    public long ObservedPacketCount { get; private set; }
     internal HidInputCapture(nint window, MouseConnection connection, IReadOnlyList<HidEndpoint> endpoints, Action<ObservedControl> observed, Action<string> status)
     {
         _connection = connection; _observed = observed; _status = status;
@@ -51,6 +52,7 @@ public sealed class HidInputCapture : IDisposable
             path = name.ToString(); _paths[device] = _allowed.Contains(path) ? path : null;
         }
         if (path is null || !_allowed.Contains(path)) return;
+        ObservedPacketCount++;
         uint length = 0;
         if (GetRawInputData(rawInput, 0x10000003, null, ref length, headerSize) == uint.MaxValue || length < headerSize || length > 1024 * 1024) return;
         var bytes = new byte[length];

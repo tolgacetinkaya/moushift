@@ -1,5 +1,7 @@
 # Moushift
 
+<img src="docs/branding/moushift-mark.svg" width="72" alt="Moushift star-cutout M logo">
+
 A Windows mouse configuration workspace with per-connection profiles, an editable Click Circle, and generic HID button discovery and learning. Built with .NET 10 / WPF, without third-party NuGet packages.
 
 **Preview software.** HID discovery and learning are separate from exclusive input remapping. A learned input is not automatically an intercepted or remappable input. This preview does not claim support for every physical button on every mouse.
