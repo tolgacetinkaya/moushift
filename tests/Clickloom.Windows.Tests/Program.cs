@@ -55,6 +55,12 @@ if (args.Contains("--hid-inventory"))
 // by the native service, without starting hooks or injecting keyboard/mouse input.
 var tests = new (string Name, Action Run)[]
 {
+    ("driverless Circle uses exact input source and executes only Circle bindings", RawCircleIsolation),
+    ("driverless Circle resolves application and manual Circle profiles", RawCircleProfiles),
+    ("driverless Circle retains press ownership across pause and connection refresh", RawCircleLifecycle),
+    ("Raw Input mouse packet ABI and unthrottled button transitions", RawCirclePackets),
+    ("driverless availability cannot bypass startup and overlay owns only its own clicks", RawCircleAvailability),
+    ("Raw Input before mouse hook cannot close its own Circle and reopening remains possible", RawCircleHookOrdering),
     ("generic descriptor parsing preserves vendor pages, report IDs and collections", GenericHidCapabilities),
     ("raw mouse learning decodes edges and horizontal wheel without movement", GenericRawLearning),
     ("keyboard learning excludes ordinary typing", KeyboardLearningPrivacy),
@@ -109,6 +115,116 @@ foreach (var (name, run) in tests)
 Console.WriteLine($"{tests.Length - failures}/{tests.Length} passed; no hooks started or input injected.");
 return failures == 0 ? 0 : 1;
 
+static void RawCircleIsolation()
+{
+    var settings = AppSettings.CreateDefault();
+    settings.Profiles[0].Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
+    var corsair = ProfileResolver.CreateDeviceDefault("corsair", "Corsair");
+    corsair.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
+    corsair.RingSlots[0].Name = "Corsair action";
+    corsair.Bindings.Single(b => b.Input == MouseControl.XButton1).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Alt };
+    var other = ProfileResolver.CreateDeviceDefault("other", "Other mouse");
+    settings.Profiles.AddRange([corsair, other]);
+    var router = new RawCircleRouter();
+    router.Update([new("corsair", "Corsair", "TEST", "USB", true, false, ["path:a"]), new("other", "Same VID/PID mouse", "TEST", "USB", true, false, ["path:b"])]);
+    Require(router.Press(settings, "path:b", MouseControl.MiddleButton, true, true, null) is null, "An unassigned mouse inherited another mouse/shared Circle.");
+    Require(router.Press(settings, "unknown", MouseControl.MiddleButton, true, true, null) is null, "Unknown source used a last-active mouse.");
+    Require(router.Press(settings, "path:a", MouseControl.XButton1, true, true, null) is null, "Driverless input executed a shortcut assignment.");
+    var result = router.Press(settings, "PATH:A", MouseControl.MiddleButton, true, true, null);
+    Require(result?.DeviceKey == "corsair" && result.RingSlots[0].Name == "Corsair action", "Exact source did not resolve its Circle.");
+    result!.RingSlots[0].Name = "Detached";
+    Require(corsair.RingSlots[0].Name == "Corsair action", "Runtime modified stored Circle data.");
+}
+
+static void RawCircleProfiles()
+{
+    var settings = AppSettings.CreateDefault(); var general = ProfileResolver.CreateDeviceDefault("a", "A");
+    general.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
+    var app = general.DeepClone(); app.Id = Guid.NewGuid(); app.ApplicationPath = @"C:\test\editor.exe";
+    app.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new(); app.RingSlots[0].Name = "App action";
+    settings.Profiles.AddRange([general, app]);
+    var router = new RawCircleRouter(); router.Update([new("a", "A", "TEST", "USB", false, false, ["path"])]);
+    var resolved = router.Press(settings, "path", MouseControl.MiddleButton, true, true, app.ApplicationPath);
+    Require(resolved?.Id == app.Id && resolved.RingSlots[0].Name == "App action", "App-specific Circle or inherited trigger failed.");
+    router.Press(settings, "path", MouseControl.MiddleButton, false, true, null);
+    general.CircleAutoSwitch = false; general.ManualCircleProfileId = app.Id;
+    resolved = router.Press(settings, "path", MouseControl.MiddleButton, true, true, @"C:\test\other.exe");
+    Require(resolved?.Id == general.Id && resolved.RingSlots[0].Name == "App action", "Manual Circle selection changed the device's button routing.");
+    router.Press(settings, "path", MouseControl.MiddleButton, false, true, null);
+    app.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Disabled };
+    Require(router.Press(settings, "path", MouseControl.MiddleButton, true, true, app.ApplicationPath) is null, "An explicit application override was ignored.");
+}
+
+static void RawCircleLifecycle()
+{
+    var settings = AppSettings.CreateDefault(); var profile = ProfileResolver.CreateDeviceDefault("a", "A");
+    profile.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring }; settings.Profiles.Add(profile);
+    var a = new MouseConnection("a", "A", "TEST", "USB", true, false, ["path"]);
+    var router = new RawCircleRouter(); Require(router.Update([a]), "Initial route was not added.");
+    Require(router.Press(settings, "path", MouseControl.MiddleButton, true, false, null) is null, "Paused Circle triggered.");
+    Require(!router.Update([a]), "Unchanged polling reset input ownership.");
+    Require(router.Press(settings, "path", MouseControl.MiddleButton, true, true, null) is null, "Enabling while held synthesized a new press.");
+    router.Press(settings, "path", MouseControl.MiddleButton, false, true, null);
+    Require(router.Press(settings, "path", MouseControl.MiddleButton, true, true, null) is not null, "Fresh press was lost.");
+    Require(router.Press(settings, "path", MouseControl.MiddleButton, true, true, null) is null, "Held repeat opened another Circle.");
+    router.Update([]); Require(router.Press(settings, "path", MouseControl.MiddleButton, true, true, null) is null, "Disconnected source triggered.");
+    router.Update([a]); Require(router.Press(settings, "path", MouseControl.MiddleButton, true, true, null) is not null, "Reconnect retained a stale held press.");
+    router.Update([a, a with { Key = "ambiguous" }]);
+    Require(router.Count == 0 && router.Press(settings, "path", MouseControl.MiddleButton, true, true, null) is null, "Ambiguous source was guessed.");
+    router.Update([a with { IsAuxiliary = true }]); Require(router.Count == 0, "A virtual/additional source became a mouse trigger.");
+}
+
+static void RawCirclePackets()
+{
+    Require(System.Runtime.InteropServices.Marshal.SizeOf<RawMouseActivity.RawMousePayload>() == 24
+        && System.Runtime.InteropServices.Marshal.OffsetOf<RawMouseActivity.RawMousePayload>(nameof(RawMouseActivity.RawMousePayload.ButtonFlags)).ToInt32() == 4
+        && System.Runtime.InteropServices.Marshal.OffsetOf<RawMouseActivity.RawMousePayload>(nameof(RawMouseActivity.RawMousePayload.ExtraInfo)).ToInt32() == 20
+        && System.Runtime.InteropServices.Marshal.SizeOf<RawMouseActivity.RawMousePacket>() == 24 + 8 + 2 * IntPtr.Size, "Native Raw Input packet layout mismatch.");
+    Require(RawMouseActivity.DecodeButtons(0).Count == 0 && RawMouseActivity.DecodeButtons(0xC00).Count == 0, "Movement/wheel became a button press.");
+    var transitions = RawMouseActivity.DecodeButtons(0x10 | 0x20 | 0x40);
+    Require(transitions.SequenceEqual(new[] { (MouseControl.MiddleButton, true), (MouseControl.MiddleButton, false), (MouseControl.XButton1, true) }), "Packet lost button edges or changed side-button names.");
+    Require(RawMouseActivity.DecodeButtons(0x10).Count == 1 && RawMouseActivity.DecodeButtons(0x20).Count == 1, "Consecutive input packets were throttled.");
+}
+
+static void RawCircleAvailability()
+{
+    using var service = new MouseRemappingService();
+    service.UpdateDeviceInventory([new("a", "A", "TEST", "USB", false, false, ["path"])]);
+    Require(!service.CanEnable, "Inventory alone armed input without registration.");
+    service.SetRawInputAvailable(true); Require(service.CanEnable && service.CanTriggerCircleForDevice("a") && !service.CanTriggerCircleForDevice("b"), "Registered source was not isolated.");
+    Throws<InvalidOperationException>(() => service.SetEnabled(true), "Raw registration bypassed service startup/emergency protection.");
+    service.ObserveRawMouseButton(new("path", MouseControl.MiddleButton, true));
+    Require(!service.IsRingOpen && service.DriverlessCircleTriggerCount == 0, "Stopped service opened Circle.");
+    service.SetRawInputAvailable(false); Require(!service.CanEnable, "Lost Raw Input still allowed activation.");
+    Require(RingActionSelection.OwnPointer(MouseControl.LeftButton, true, true)
+        && !RingActionSelection.OwnPointer(MouseControl.LeftButton, false, true)
+        && !RingActionSelection.OwnPointer(MouseControl.MiddleButton, true, true)
+        && !RingActionSelection.OwnPointer(MouseControl.XButton1, false, true), "Driverless overlay swallowed unrelated original buttons.");
+}
+
+static void RawCircleHookOrdering()
+{
+    var settings = AppSettings.CreateDefault(); var profile = ProfileResolver.CreateDeviceDefault("corsair", "Corsair");
+    profile.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
+    settings.Profiles.Add(profile); var router = new RawCircleRouter();
+    router.Update([new("corsair", "Corsair", "TEST", "USB", true, false, ["corsair:path"])]);
+    // Replay the native trace: Raw DOWN, Circle opened, then the same WH_MOUSE_LL DOWN.
+    var opened = router.Press(settings, "corsair:path", MouseControl.MiddleButton, true, true, null);
+    Require(opened?.DeviceKey == "corsair", "Source-identified Circle did not open.");
+    Require(RingActionSelection.ForwardOriginalButton(true, MouseControl.MiddleButton), "The opening middle-button hook event dismissed its own Circle.");
+    router.Press(settings, "corsair:path", MouseControl.MiddleButton, false, true, null);
+    // Already-open Circle does not queue another open, and its native trigger is still forwarded.
+    Require(router.Press(settings, "corsair:path", MouseControl.MiddleButton, true, false, null) is null
+        && RingActionSelection.ForwardOriginalButton(true, MouseControl.MiddleButton), "A second trigger consumed original input or reopened an existing Circle.");
+    router.Press(settings, "corsair:path", MouseControl.MiddleButton, false, false, null);
+    // After the user closes it with an outside left click, a new physical middle press must work.
+    Require(!RingActionSelection.ForwardOriginalButton(true, MouseControl.LeftButton)
+        && !RingActionSelection.OwnPointer(MouseControl.LeftButton, false, true), "Outside left-click dismissal was lost.");
+    Require(router.Press(settings, "corsair:path", MouseControl.MiddleButton, true, true, null)?.DeviceKey == "corsair", "Circle could not reopen after closing.");
+    Require(RingActionSelection.ForwardOriginalButton(true, MouseControl.XButton1)
+        && !RingActionSelection.ForwardOriginalButton(false, MouseControl.MiddleButton), "Driverless fix changed exclusive behavior or swallowed another original button.");
+}
+
 static void ConnectionGrouping()
 {
     var inputs = new[] {
@@ -123,7 +239,7 @@ static void ConnectionGrouping()
     if (devices.Count != 3 || devices.Single(d => d.Key == "razer").DevicePaths.Length != 2)
         throw new Exception("Multiple interfaces were counted as multiple physical devices.");
     var receiver = devices.Single(d => d.Key == "razer");
-    if (!receiver.IsReceiver || !receiver.Status.Contains("unknown") || devices[^1].Key != "virtual"
+    if (!receiver.IsReceiver || !receiver.Status.Contains("receiver connected") || !receiver.Status.Contains("unconfirmed") || devices[^1].Key != "virtual"
         || devices.Single(d => d.Key == "corsair").IsReceiver)
         throw new Exception("Receiver presence was confused with mouse power or a physical input.");
     if (MouseConnectionCatalog.Build([], _ => throw new Exception()).Count != 0)

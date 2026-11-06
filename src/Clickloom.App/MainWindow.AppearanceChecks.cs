@@ -14,7 +14,7 @@ public partial class MainWindow
         string path = Path.Combine(isolatedRoot, "profiles.json");
         byte[] before = File.ReadAllBytes(path);
         string original = ThemeManager.Current;
-        foreach (string id in new[] { "copper", "pink" })
+        foreach (string id in new[] { "light", "dark" })
         {
             ThemeCombo.SelectedValue = id;
             if (ThemeManager.Current != id) throw new InvalidOperationException("Theme selector did not apply its theme.");
@@ -22,9 +22,9 @@ public partial class MainWindow
             ThemeManager.Initialize(null);
             if (ThemeManager.Current != id) throw new InvalidOperationException("Appearance did not survive reload.");
             var accent = (SolidColorBrush)ThemeManager.Brush("Accent");
-            if (accent.Color != (Color)ColorConverter.ConvertFromString(id == "pink" ? "#FF2DAA" : "#52AA92"))
+            if (accent.Color != (Color)ColorConverter.ConvertFromString(id == "dark" ? "#D79CB1" : "#7D344A"))
                 throw new InvalidOperationException("Accent does not match the approved theme.");
-            if (((SolidColorBrush)MappingsNav.Background).Color != ((SolidColorBrush)ThemeManager.Brush("Selection")).Color)
+            if (((SolidColorBrush)DevicesNav.Background).Color != ((SolidColorBrush)ThemeManager.Brush("Selection")).Color)
                 throw new InvalidOperationException("Navigation kept the previous theme after a live switch.");
         }
         if (!before.SequenceEqual(File.ReadAllBytes(path))) throw new InvalidOperationException("Changing appearance modified mouse profiles.");

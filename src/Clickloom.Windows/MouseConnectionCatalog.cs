@@ -5,9 +5,9 @@ namespace Clickloom.Windows;
 
 public sealed record MouseConnection(string Key, string Name, string Manufacturer, string Transport, bool IsReceiver, bool IsAuxiliary, string[] DevicePaths)
 {
-    public string Status => IsReceiver ? "Receiver detected · mouse power unknown"
+    public string Status => IsReceiver ? Transport + " receiver connected · mouse availability unconfirmed"
         : IsAuxiliary ? "Additional pointing interface"
-        : Transport == "Bluetooth" ? "Bluetooth interface detected · power unknown" : Transport + " input interface detected";
+        : Transport == "Bluetooth" ? "Bluetooth interface connected · mouse availability unconfirmed" : Transport + " mouse interface connected";
 }
 
 internal sealed record MouseConnectionIdentity(string Key, string Name, string Transport, bool IsAuxiliary);

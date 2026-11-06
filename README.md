@@ -6,15 +6,15 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 
 ## What works
 
-- Mouse connection gallery and independent device/application profiles.
+- Side-by-side mouse gallery with a persistent inspector for the selected mouse and independent device/application profiles.
 - Click Circle: searchable action library, drag/drop, folders, shortcut parameters and undo/redo.
 - Generic HID descriptor discovery without a manufacturer/model allowlist or vendor commands.
 - Teach a button: choose a point on the mouse drawing, explicitly listen, press the same input twice, name it and save locally.
 - Learned input identities and normalized drawing positions persist per connection. Learning/repositioning does not change the device firmware or vendor configuration.
-- Existing Copper + Mint and Gunmetal + Pink themes.
+- Light (silver / wine) and dark (charcoal / muted rose) themes, switchable from the title bar or Settings.
 - Atomic local settings writes with a last-good backup.
 
-![Button learning screen — illustrative test data](docs/ui-012/learning-copper.png)
+![Device gallery and selected-mouse inspector — illustrative test data](docs/ui-014/light-gallery.png)
 
 ## Current boundaries
 
@@ -24,19 +24,20 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 | Button learning | Standard mouse buttons/wheel, declared HID button usages, and F13–F24 from associated interfaces |
 | Firmware-only buttons | Cannot be learned when no accessible event is emitted |
 | Physical button location | Chosen manually on the drawing; HID does not supply universal diagram coordinates |
-| Standard live remapping | Existing optional Interception backend; requires separate installation and verified source routing |
+| Driverless Click Circle | Five standard buttons, exact source mouse and foreground app profile; original trigger still reaches Windows |
+| Standard live remapping | Optional Interception backend for exclusive remapping; separate installation and verified source routing |
 | Arbitrary learned HID remapping | Not implemented; assignments are explicitly stored as inactive drafts |
 | Receiver identity | A receiver may represent multiple devices; its presence does not prove mouse power or uniquely identify a paired mouse |
 | Manufacturer-specific protocols | Not used for generic discovery/learning; no vendor output/feature reports are sent |
 
-The app starts with assignments paused. Without configured input support it shows **Input setup required**. Learning and Circle previews remain available. A prepared action must not be mistaken for a working live binding. No driver is bundled or automatically installed.
+The app starts paused. With connected Raw Input sources it offers **Enable Circle**, requiring no driver. This mode activates only standard-button Circle bindings; other assignments remain inactive and the original trigger reaches Windows. Custom HID and wheel triggers are not live in this mode. No driver is bundled or automatically installed.
 
 ## Run
 
 Requires Windows and the .NET 10 Desktop Runtime (x64 for the portable build). Extract a release ZIP and run `Clickloom.exe`. For a local source build, use `Start-Clickloom.cmd` after building.
 
 1. Select your mouse connection in **Devices**.
-2. Open **Teach a button…**.
+2. Open **Button positions → Teach a button…** in that mouse's inspector.
 3. Click its position on the drawing.
 4. Click **Listen for button**, release held buttons, and press the target twice.
 5. Review the detected identity/name and choose **Save button**.

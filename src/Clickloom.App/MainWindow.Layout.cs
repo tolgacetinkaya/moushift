@@ -20,13 +20,18 @@ public partial class MainWindow
     private void ApplyWorkspaceSizing()
     {
         double width = ActualWidth > 0 ? ActualWidth : Width, height = ActualHeight > 0 ? ActualHeight : Height;
-        bool compact = width < 1250 || height < 850;
-        SidebarColumn.Width = new GridLength(width < 1250 ? 210 : 232);
+        SidebarColumn.Width = new GridLength(width < 1250 ? 156 : 190);
+        InspectorColumn.Width = new GridLength(width < 1250 ? 350 : 420);
+        double galleryWidth = width - SidebarColumn.Width.Value - InspectorColumn.Width.Value - 62;
+        int visible = _deviceCards.Count >= 3 && galleryWidth >= 750 ? 3 : 2;
+        Resources["DeviceTileWidth"] = Math.Clamp((galleryWidth - visible * 10) / visible, 218, 360);
+        Resources["DeviceTileHeight"] = Math.Clamp(height - 365, 380, 640);
         // Action forms never determine the size of the artwork.
-        DiagramStage.Height = compact ? 350 : 480;
-        BindingsList.Height = 190;
+        DiagramStage.Height = 280;
+        BindingsList.Height = Math.Min(224, _bindings.Count * 43 + 4);
         HeroMouse.MaxWidth = 400; HeroMouse.MaxHeight = 500;
-        EditorPane.Padding = new Thickness(compact ? 12 : 16);
+        EditorPane.Padding = new Thickness(0, 18, 0, 0);
+        UpdateCircleSummaryVisibility();
         PlaceMarkers();
     }
     private void PlaceMarkers()
@@ -47,16 +52,54 @@ public partial class MainWindow
         EditingProfile.Bindings.Single(b => b.Input == MouseControl.XButton1).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Alt };
         RefreshBindings(MouseControl.XButton1); OpenEditor(); ApplyWorkspaceSizing(); StatusText.Text = "This mouse only · Assignments off";
     }
+    internal void PrepareDesignFixture()
+    {
+        // Deterministic presentation data is never used by the live inventory or user's store.
+        if (!_previewOnly) throw new InvalidOperationException("Design fixtures require preview mode.");
+        _deviceCards.Clear();
+        var a = new DeviceCard("preview:corsair", "Corsair Dark Core", "Corsair", "USB receiver connected · mouse availability unconfirmed", ThemeManager.Brush("Accent"), "preview:corsair");
+        var b = new DeviceCard("preview:logi", "MX Master 4", "Logitech", "Bluetooth interface connected · mouse availability unconfirmed", ThemeManager.Brush("Accent"), "preview:logi");
+        _deviceCards.Add(a); _deviceCards.Add(b);
+        DeviceCard_Click(new Button { Tag = a }, new RoutedEventArgs());
+        EditingProfile.Bindings.Single(x => x.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
+        a.Activity = "Input detected"; b.Activity = "Last input recently";
+        EmptyDevicesBox.Visibility = Visibility.Collapsed;
+        EngineBadge.Text = "Circle enabled"; EnableButton.Content = "Pause";
+        EnableButton.Style = (Style)FindResource(typeof(Button));
+        DevicesSubtitle.Text = "2 Windows mouse connections · 1 receiver";
+        ReceiverConnectionsList.ItemsSource = _deviceCards;
+        RefreshBindings(MouseControl.MiddleButton); CloseEditor(); ApplyWorkspaceSizing();
+    }
     internal void PrepareOffscreenPage(string page)
     {
-        var connections = Clickloom.Windows.MouseConnectionCatalog.Enumerate(); _connections = connections;
-        SyncDeviceRows(_deviceCards, connections.Where(d => !d.IsAuxiliary));
-        DeviceCardsList.ItemsSource = _deviceCards;
-        EmptyDevicesBox.Visibility = _deviceCards.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        DevicesSubtitle.Text = _deviceCards.Count + " mouse connections · separate profiles";
+        ApplyConnectionInventory(Clickloom.Windows.MouseConnectionCatalog.Enumerate());
         ShowPage(page); ApplyWorkspaceSizing();
     }
     internal void FinishOffscreenWorkspaceLayout() { PlaceMarkers(); }
+    private void CircleTab_Click(object sender, RoutedEventArgs e)
+    {
+        CloseEditor(); ButtonsContent.Visibility = Visibility.Collapsed;
+        UpdateCircleSummaryVisibility();
+        SetInspectorTab(true);
+    }
+    private void UpdateCircleSummaryVisibility()
+    {
+        double height = ActualHeight > 0 ? ActualHeight : Height;
+        CircleSummary.Visibility = EditorPane.Visibility != Visibility.Visible && (height >= 850 || ButtonsContent.Visibility == Visibility.Collapsed)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void SetInspectorTab(bool circle)
+    {
+        foreach (var (tab, selected) in new[] { (MappingsNav, !circle), (RingNav, circle) })
+        {
+            tab.SetResourceReference(Control.ForegroundProperty, selected ? "Accent" : "Muted");
+            tab.SetResourceReference(Control.BorderBrushProperty, selected ? "Accent" : "Panel");
+            tab.SetResourceReference(Control.BackgroundProperty, "Panel");
+            tab.BorderThickness = new Thickness(0, 0, 0, selected ? 2 : 0);
+            tab.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
+        }
+    }
+    private void ToggleTheme_Click(object sender, RoutedEventArgs e) => ThemeCombo.SelectedValue = ThemeManager.Current == "light" ? "dark" : "light";
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || ThemeCombo.SelectedValue is not string id) return;

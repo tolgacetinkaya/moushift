@@ -34,13 +34,17 @@ public partial class MainWindow
         if (sender is not Button { Tag: Guid id }) return;
         var profile = _settings.Profiles.FirstOrDefault(p => p.Id == id);
         if (profile is null || profile.DeviceKey is null) { ShowPage("devices"); return; }
+        _editingSavedProfile = true;
         _selectedDevice = profile.DeviceKey is null ? GlobalDeviceCard()
             : new(profile.DeviceKey, profile.DeviceName ?? _connections.FirstOrDefault(c => c.Key == profile.DeviceKey)?.Name ?? "Saved mouse", "PROFILE", "Saved profile", (System.Windows.Media.Brush)FindResource("Accent"), profile.DeviceKey);
         _loading = true; _deviceScope = profile.DeviceKey is not null; DeviceScopeCheck.IsChecked = _deviceScope;
         ShowAuxiliaryCheck.IsEnabled = !_deviceScope;
         if (_deviceScope) ShowAuxiliaryCheck.IsChecked = false;
         _loading = false;
-        _editingProfileId = profile.Id; PopulateProfiles(); RefreshBindings(); CloseEditor(); ShowPage("mappings");
+        _editingProfileId = profile.Id;
+        foreach (var row in _deviceCards) row.IsSelected = row.DeviceKey == profile.DeviceKey;
+        ButtonsContent.Visibility = Visibility.Visible;
+        PopulateProfiles(); RefreshBindings(); CloseEditor(); ShowPage("mappings");
     }
     private void RenameProfile_Click(object sender, RoutedEventArgs e)
     {

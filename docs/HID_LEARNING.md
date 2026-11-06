@@ -20,7 +20,7 @@ Location is an independent normalized X/Y point on the approved mouse artwork. I
 
 ## Assignment scope
 
-Standard learned controls annotate the existing standard mouse binding and drawing marker. Other learned HID inputs appear as additional rows; action configurations are stored as **inactive drafts**, because arbitrary HID suppression/rewrite is not implemented. Detection alone must not enable a duplicate original action. Existing source-specific interception requirements are unchanged.
+Standard learned controls annotate the existing standard mouse binding and drawing marker. Standard-button Click Circle can run through the separate [driverless trigger path](DRIVERLESS_CIRCLE.md), retaining the original click. Other learned HID inputs appear as additional rows; action configurations are stored as **inactive drafts**, because arbitrary HID suppression/rewrite is not implemented. Exclusive remapping requirements remain separate from Circle observation.
 
 The settings schema remains 1 with additive learned-control and learned-binding collections. Existing fields, Circle documents, identities and themes are retained. Relearning the same input preserves its ID and action references. Button reset clears its action drafts but retains learned positions. Cross-mouse binding references and invalid coordinates are rejected.
 

@@ -52,17 +52,28 @@ internal static class OffscreenPreview
             var main = new MainWindow(true);
             if (args.Contains("--compact")) { main.Width = 1130; main.Height = 760; }
             if (args.Contains("--verify-device-ui")) main.VerifyDeviceProfileEditor();
-            if (workspace >= 0) main.PrepareOffscreenWorkspace(); else main.PrepareOffscreenPage(devices >= 0 ? "devices" : settings >= 0 ? "appearance" : "setup");
+            if (args.Contains("--design-fixture")) main.PrepareDesignFixture();
+            else if (workspace >= 0) main.PrepareOffscreenWorkspace(); else main.PrepareOffscreenPage(devices >= 0 ? "devices" : settings >= 0 ? "appearance" : "setup");
+            if (args.Contains("--edit-button")) main.PrepareDesignButtonEditor();
             window = main;
         }
         var content = (FrameworkElement)window.Content; window.Content = null;
         var size = new Size(window.Width, window.Height);
-        var host = new Border { Width = size.Width, Height = size.Height, Background = ThemeManager.Brush("Bg"), Child = content };
+        var host = new Border { Width = size.Width, Height = size.Height, Background = ThemeManager.Brush("Bg"), Child = content, Resources = window.Resources };
         System.Windows.Documents.TextElement.SetForeground(host, ThemeManager.Brush("Ink"));
         System.Windows.Documents.TextElement.SetFontFamily(host, window.FontFamily);
         System.Windows.Documents.TextElement.SetFontSize(host, window.FontSize);
         host.Measure(size); host.Arrange(new Rect(size)); host.UpdateLayout();
-        if (window is MainWindow mainWindow) { mainWindow.FinishOffscreenWorkspaceLayout(); host.UpdateLayout(); }
+        if (window is MainWindow mainWindow)
+        {
+            mainWindow.FinishOffscreenWorkspaceLayout(); host.UpdateLayout();
+            if (args.Contains("--verify-design")) { mainWindow.VerifyDesignWorkspace(); host.UpdateLayout(); }
+        }
+        // Flush resource/binding invalidations after a live theme switch on the detached tree.
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        host.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () => frame.Continue = false);
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+        host.UpdateLayout();
         if (window is RingEditorWindow circleEditor)
         {
             if (args.Contains("--verify-editor")) circleEditor.VerifyDragPresentation();

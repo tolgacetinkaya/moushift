@@ -19,5 +19,11 @@ internal static class RingActionSelection
         && stamp.EnableEpoch == request.EnableEpoch && stamp.RoutingGeneration == request.RoutingGeneration
         && request.TargetWindow != 0 && foreground == request.TargetWindow;
 
-    public static bool OwnPointer(MouseControl control, bool inside) => inside || control is MouseControl.XButton1 or MouseControl.XButton2;
+    public static bool OwnPointer(MouseControl control, bool inside, bool driverless = false) => driverless
+        ? inside && control == MouseControl.LeftButton
+        : inside || control is MouseControl.XButton1 or MouseControl.XButton2;
+
+    // Raw Input and WH_MOUSE_LL have no guaranteed cross-thread delivery order.
+    // A non-left original button must not dismiss the Circle it just opened through Raw Input.
+    public static bool ForwardOriginalButton(bool driverless, MouseControl control) => driverless && control != MouseControl.LeftButton;
 }

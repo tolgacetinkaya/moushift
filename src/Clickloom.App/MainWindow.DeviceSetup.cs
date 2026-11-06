@@ -18,11 +18,13 @@ public partial class MainWindow
     {
         bool ready = _service?.HasResolvedDeviceRoutes == true;
         bool capturing = _service?.HasDeviceRouting == true;
-        SetupStatusTitle.Text = ready ? "Your mice have separate input sources" : "Assignments cannot be enabled yet";
+        bool driverless = _service?.HasDriverlessCircleSources == true;
+        SetupStatusTitle.Text = ready ? "Your mice have separate input sources" : driverless ? "Click Circle is ready without a driver" : "Waiting for a mouse connection";
         SetupStatusDescription.Text = ready ? "Profiles are isolated by mouse. A mouse with no profile keeps its normal buttons."
+            : driverless ? "Each connected mouse opens its own Circle from a standard button assigned to Click Circle. Enable Circle, switch to another application and press that mouse's button. Original clicks still reach Windows. Other button actions and custom HID assignment drafts remain inactive without exclusive input support."
             : capturing ? "Input support is running, but no mouse has a verified input source. Assignments stay off until a source is matched. Your profiles are saved."
-            : "Circle editing, folders and previews are available. Live button assignments are off because device input support is not configured. Choosing a mouse or saving a profile does not enable live interception.";
-        SetupBackendState.Text = ready ? "Ready" : capturing ? "No verified source" : "Not configured";
+            : "Connect a mouse and wait for Windows input observation. Driverless Click Circle needs no library or driver installation. Exclusive button remapping is a separate optional feature.";
+        SetupBackendState.Text = ready ? "Exclusive input ready" : driverless ? "Driverless Circle ready" : capturing ? "No verified source" : "Waiting for mouse";
         SetupConnectionRows.ItemsSource = _deviceCards;
     }
     private void ImportPrevious_Click(object sender, RoutedEventArgs e)
@@ -81,6 +83,24 @@ public partial class MainWindow
         if (shortcut.Kind != ActionKind.Shortcut || shortcut.KeyCode != 9 || shortcut.Modifiers != KeyModifiers.Alt) throw new InvalidOperationException("Device shortcut lost its modifiers or appeared on another mouse.");
         if (_store.Load().Settings.Profiles.Single(p => p.DeviceKey == b.Key).Bindings.Any(x => x.Action.Kind != ActionKind.Passthrough)) throw new InvalidOperationException("Storage leaked assignments across mice.");
         if (DeviceHeading.Text != a.Name) throw new InvalidOperationException("A card opened another device's settings heading.");
-        VerifyProfileScreens(); CloseEditor(); Console.WriteLine("PASS isolated WPF gallery: three cards, title above original artwork, actual card clicks, independent profiles and save/reopen; no windows or input.");
+        VerifyProfileScreens();
+        var fixtures = new[] {
+            new Clickloom.Windows.MouseConnection(a.Key, a.Name, "TEST", "USB", true, false, ["fixture:a"]),
+            new Clickloom.Windows.MouseConnection(b.Key, b.Name, "TEST", "USB", false, false, ["fixture:b"]),
+            new Clickloom.Windows.MouseConnection(c.Key, c.Name, "TEST", "USB", false, false, ["fixture:c"]) };
+        string settingsBefore = System.Text.Json.JsonSerializer.Serialize(_settings);
+        _lastDeviceInput[a.Key] = DateTime.UtcNow;
+        ApplyConnectionInventory([fixtures[1]]);
+        if (_deviceCards.Count != 1 || _deviceCards[0].Key != b.Key || _lastDeviceInput.ContainsKey(a.Key))
+            throw new InvalidOperationException("Disconnected cards or old input activity remained in the gallery/sidebar.");
+        ApplyConnectionInventory([]);
+        if (_deviceCards.Count != 0 || EmptyDevicesBox.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Disconnected mice remained visible or the empty state was missing.");
+        if (System.Text.Json.JsonSerializer.Serialize(_settings) != settingsBefore || _store.Load().Settings.Profiles.Single(p => p.Id == first).Bindings.Single(x => x.Input == MouseControl.MiddleButton).Action.Kind != ActionKind.Ring)
+            throw new InvalidOperationException("Connection refresh changed a saved mouse assignment.");
+        ApplyConnectionInventory(fixtures);
+        if (_deviceCards.Count != 3 || !_deviceCards.Single(d => d.Key == a.Key).Detail.Contains("unconfirmed") || _deviceCards.Any(d => d.Activity == "Input just now"))
+            throw new InvalidOperationException("A connected receiver was hidden or reconnect reused old activity.");
+        CloseEditor(); Console.WriteLine("PASS isolated WPF gallery: three cards, scoped profiles, disconnect/reconnect, receiver status and preserved assignments; no windows or input.");
     }
 }

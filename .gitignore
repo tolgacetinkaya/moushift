@@ -23,3 +23,26 @@ device-input.json
 /docs/LOGI_RESEARCH.md
 /docs/ACTIONS_RING_RESEARCH_05.md
 /design-qa.md
+# Local design experiments and historical capture sets stay outside the public source tree.
+/docs/design-concepts/
+/docs/*.png
+/docs/*.jpg
+/docs/UI_*.md
+/docs/V0*.md
+/docs/VALIDATION.md
+/docs/DEVICE_INPUT_SETUP_09.md
+/docs/ui-*/
+!/docs/ui-012/
+!/docs/ui-014/
+/docs/ui-012/*
+!/docs/ui-012/learning-copper.png
+!/docs/ui-012/learning-pink.png
+!/docs/ui-012/learning-light.png
+!/docs/ui-012/learning-dark.png
+/docs/ui-014/*
+!/docs/ui-014/light-gallery.png
+!/docs/ui-014/dark-gallery.png
+!/docs/ui-014/light-dark.png
+!/docs/ui-014/light-compact.png
+device-support.json
+*.log

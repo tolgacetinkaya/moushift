@@ -23,13 +23,14 @@ public sealed class RingWindow : Window
     private readonly TextBlock _hint = new() { FontSize = 10, Width = 250, TextAlignment = TextAlignment.Center };
     private readonly System.Windows.Threading.DispatcherTimer _pointer = new() { Interval = TimeSpan.FromMilliseconds(25) };
     private readonly bool _preview;
+    private readonly bool _driverless;
     private readonly long _opened = Stopwatch.GetTimestamp();
     private int[]? _hovered, _pressed;
     private bool _pressStarted, _pressCancelled, _adjusted;
 
-    public RingWindow(IReadOnlyList<RingSlot> slots, bool preview = false)
+    public RingWindow(IReadOnlyList<RingSlot> slots, bool preview = false, bool driverless = false)
     {
-        _root = slots; _preview = preview;
+        _root = slots; _preview = preview; _driverless = driverless;
         Width = Height = CircleSize; FontFamily = new("Segoe UI"); WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true; Background = Brushes.Transparent; ShowActivated = false; ShowInTaskbar = false; Topmost = true;
         Content = _canvas; Draw();
@@ -90,7 +91,7 @@ public sealed class RingWindow : Window
     {
         var slot = _hovered is null ? null : RingNavigation.Resolve(_root, _hovered);
         _title.Text = slot?.Name ?? (_path.Count > 0 ? RingNavigation.Resolve(_root, _path)?.Name : _preview ? "Preview" : "Circle");
-        _hint.Text = slot?.Kind switch { RingSlotKind.Folder => "Open folder", RingSlotKind.Adjustment => "Scroll to adjust", _ when slot is not null => "Click to run", _ => _path.Count > 0 ? "Center to go back" : "Hold · point · release" };
+        _hint.Text = slot?.Kind switch { RingSlotKind.Folder => "Open folder", RingSlotKind.Adjustment => "Scroll to adjust", _ when slot is not null => "Click to run", _ => _path.Count > 0 ? "Center to go back" : _driverless ? "Click an action · outside to close" : "Hold · point · release" };
     }
     private void Activate(int[] path)
     {

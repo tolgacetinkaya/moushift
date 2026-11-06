@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<BindingRow> _bindings = [];
     private readonly ObservableCollection<DeviceCard> _deviceCards = [];
     private DeviceCard? _selectedDevice;
+    private bool _editingSavedProfile;
     private bool _deviceScope;
     private RingWindow? _ringWindow;
     private bool _ringPreview;
@@ -62,7 +63,9 @@ public partial class MainWindow : Window
         _editingProfileId = _settings.ActiveProfileId;
         ProfilesList.ItemsSource = _profiles;
         BindingsList.ItemsSource = _bindings;
-        DeviceCardsList.ItemsSource = _deviceCards; SidebarDevicesList.ItemsSource = _deviceCards;
+        DeviceCardsList.ItemsSource = _deviceCards;
+        Resources["DeviceTileWidth"] = 280d;
+        Resources["DeviceTileHeight"] = 640d;
         ActionCombo.ItemsSource = new[]
         {
             new ActionChoice(ActionKind.Passthrough, "Default"),
@@ -122,8 +125,7 @@ public partial class MainWindow : Window
         {
             UpdateEngineState(); UpdateDeviceActivity(); if (++_presenceTicks % 2 == 0) RefreshDevices();
         };
-        _statusTimer.Start();
-        RefreshDevices();
+        if (!previewOnly) { _statusTimer.Start(); RefreshDevices(); }
         ShowPage("devices"); CloseEditor();
         if (!previewOnly) SourceInitialized += (_, _) => StartDeviceActivity();
         Closing += Window_Closing;
@@ -137,7 +139,7 @@ public partial class MainWindow : Window
             {
                 timer.Stop();
                 bool healthy = _service is { IsRunning: true, IsEnabled: false } && string.IsNullOrWhiteSpace(_service.LastError);
-                if (healthy && !_service!.HasResolvedDeviceRoutes)
+                if (healthy && !_service!.CanEnable)
                 {
                     bool refused = false;
                     try { _service.SetEnabled(true); } catch (InvalidOperationException) { refused = true; }
@@ -160,8 +162,8 @@ public partial class MainWindow : Window
             if (verifyEditor)
             {
                 DeviceCard_Click(new System.Windows.Controls.Button { Tag = _deviceCards.FirstOrDefault(c => c.DeviceKey is not null) ?? new DeviceCard("test:editor", "Editor test mouse", "TEST", "Fixture", ThemeManager.Brush("Accent"), "test:editor") }, new RoutedEventArgs());
-                if (MappingPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Collapsed || EditorPane.Visibility != Visibility.Collapsed)
-                    throw new InvalidOperationException("Device selection did not open its diagram with the action panel closed.");
+                if (MappingPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Visible || EditorPane.Visibility != Visibility.Collapsed)
+                    throw new InvalidOperationException("Device selection did not retain the gallery beside its inspector with the action form closed.");
                 if (BackCallout.Tag?.ToString() != "XButton1" || ForwardCallout.Tag?.ToString() != "XButton2"
                     || Grid.GetRow(BackCallout) <= Grid.GetRow(ForwardCallout)
                     || MouseName(MouseControl.XButton1) != "Back button" || MouseName(MouseControl.XButton2) != "Forward button")
@@ -346,6 +348,8 @@ public partial class MainWindow : Window
             ? b.VirtualKey == auxiliaryKey : b.Mouse == select && b.VirtualKey is null) ?? _bindings[3];
         _loading = prior;
         LoadSelectedBinding();
+        InspectorCircle.SetSlots(EditingProfile.RingSlots);
+        ApplyWorkspaceSizing();
         if (IsInitialized) PlaceMarkers();
         if (IsLoaded && SourceExpander.IsExpanded)
         {
@@ -402,7 +406,8 @@ public partial class MainWindow : Window
             ActionKind.MouseButton => "Supports holding and dragging.",
             ActionKind.Text => "Types text into the focused application.",
             ActionKind.LaunchApplication => "Opens your selected local application.",
-            ActionKind.Ring => "Opens the Click Circle beside your pointer.",
+            ActionKind.Ring => _service?.HasResolvedDeviceRoutes == true ? "Opens the Click Circle beside your pointer."
+                : "Driverless: opens this mouse's Click Circle. Its original click also reaches Windows; click an action to select it.",
             _ => ""
         };
     }
@@ -570,17 +575,18 @@ public partial class MainWindow : Window
         try
         {
             if (_service is null) return;
-            if (!_service.HasResolvedDeviceRoutes)
+            if (!_service.CanEnable)
             {
                 ShowPage("setup"); SetupGuideExpander.IsExpanded = true;
                 StatusText.Text = _service.HasDeviceRouting
                     ? "Cannot enable: no verified mouse input source. Your saved profiles are unchanged."
-                    : "Cannot enable: device input support is not configured. Circle editing and previews are available.";
+                    : "Connect a mouse and wait for input observation. Click Circle does not require a driver.";
                 return;
             }
             _service.SetEnabled(!_service.IsEnabled);
             StatusText.Text = _service.IsEnabled
-                ? "Assignments enabled · Your saved actions are active."
+                ? _service.DriverlessCircleMode ? "Click Circle enabled for each mouse · Original button functions are retained. Other assignments stay inactive."
+                    : "Assignments enabled · Your saved actions are active."
                 : "Assignments paused · Normal mouse behavior.";
             UpdateEngineState();
         }
@@ -620,18 +626,18 @@ public partial class MainWindow : Window
         if (_disposed || _service is null) return;
         if (!_service.IsEnabled && !_ringPreview) CloseRingVisual();
         bool enabled = _service.IsEnabled;
-        EngineBadge.Text = !_service.IsRunning ? "Input unavailable" : !_service.HasResolvedDeviceRoutes ? "Input setup required" : enabled ? "Enabled" : "Paused";
+        EngineBadge.Text = !_service.IsRunning ? "Input unavailable" : !_service.CanEnable ? "Waiting for mouse" : enabled ? _service.DriverlessCircleMode ? "Circle enabled · Driverless" : "Enabled" : "Paused";
         EngineBadge.Foreground = (Brush)FindResource(enabled ? "Accent" : "Muted");
-        EnableButton.Content = !_service.HasResolvedDeviceRoutes ? "Input setup" : enabled ? "Pause" : "Enable";
-        EnableButton.Style = (Style)FindResource(_service.HasResolvedDeviceRoutes ? "Primary" : "Quiet");
+        EnableButton.Content = !_service.CanEnable ? "Input status" : enabled ? "Pause" : _service.DriverlessCircleMode ? "Enable Circle" : "Enable";
+        EnableButton.Style = (Style)FindResource(_service.CanEnable && !enabled ? "Primary" : typeof(System.Windows.Controls.Button));
         EnableButton.IsEnabled = _service.IsRunning;
         if (_service.IsRunning)
         {
             EmergencyShortcutLabel.Text = _service.EmergencyShortcut.Replace("+", " + ");
             EmergencyHelp.Text = _service.EmergencyShortcut + " pauses assignments. Standard mouse actions pause inside the editor. Closing minimizes to the system tray; choose Quit to exit.";
         }
-        if (_tray is not null) _tray.Text = !_service.HasResolvedDeviceRoutes ? "Clickloom · Input setup required" : enabled ? "Clickloom · Assignments enabled" : "Clickloom · Paused";
-        if (_trayToggle is not null) { _trayToggle.Text = !_service.HasResolvedDeviceRoutes ? "Input setup required" : enabled ? "Pause assignments" : "Enable assignments"; _trayToggle.Enabled = _service.IsRunning; }
+        if (_tray is not null) _tray.Text = !_service.CanEnable ? "Clickloom · Waiting for mouse" : enabled ? _service.DriverlessCircleMode ? "Clickloom · Driverless Circle enabled" : "Clickloom · Assignments enabled" : "Clickloom · Paused";
+        if (_trayToggle is not null) { _trayToggle.Text = !_service.CanEnable ? "Input status" : enabled ? "Pause" : _service.DriverlessCircleMode ? "Enable Click Circle" : "Enable assignments"; _trayToggle.Enabled = _service.IsRunning; }
         if (!string.IsNullOrWhiteSpace(_service.LastError)) StatusText.Text = _service.LastError;
         string inputStatus = _service.InputStatus;
         foreach (var label in InputPresentation.MouseInputs) inputStatus = inputStatus.Replace(label.Control + ":", label.Name + ":", StringComparison.Ordinal);
@@ -646,49 +652,56 @@ public partial class MainWindow : Window
                 {
                     Version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3),
                     _service.IsRunning, _service.IsEnabled, _service.InputStatus, _service.LastError,
+                    _service.CanEnable, _service.DriverlessCircleMode, _service.HasDriverlessCircleSources, _service.DriverlessCircleTriggerCount,
+                    CircleOpen = _service.IsRingOpen,
+                    _service.RecentCircleInput,
                     _service.ActiveProfileName, Foreground = Path.GetFileName(_service.ForegroundApplication)
                 }));
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
         }
         if (DateTime.UtcNow - _lastInputShown > TimeSpan.FromSeconds(4))
-            InputStatusText.Text = !_service.HasResolvedDeviceRoutes ? "Device support required" : _service.IsEnabled ? "Per-mouse assignments enabled" : "Assignments paused";
+            InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? _service.DriverlessCircleMode ? "Driverless Circle · Original input retained" : "Per-mouse assignments enabled" : "Paused";
     }
 
-    private void MappingsNav_Click(object sender, RoutedEventArgs e) => ShowPage("mappings");
+    private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; UpdateCircleSummaryVisibility(); SetInspectorTab(false); }
     private void DevicesNav_Click(object sender, RoutedEventArgs e) { ShowPage("devices"); RefreshDevices(); }
     private void AboutNav_Click(object sender, RoutedEventArgs e) => ShowPage("about");
     private void ShowPage(string page)
     {
         if (page == "mappings" && _selectedDevice?.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse to edit its separate profile."; return; }
-        ProfileToolbar.Visibility = page == "mappings" ? Visibility.Visible : Visibility.Collapsed;
+        bool workspace = page is "devices" or "mappings";
+        DevicesWorkspace.Visibility = workspace ? Visibility.Visible : Visibility.Collapsed;
+        ProfileToolbar.Visibility = workspace ? Visibility.Visible : Visibility.Collapsed;
         SetupPage.Visibility = page == "setup" ? Visibility.Visible : Visibility.Collapsed;
-        MappingPage.Visibility = page == "mappings" ? Visibility.Visible : Visibility.Collapsed;
-        DevicesPage.Visibility = page == "devices" ? Visibility.Visible : Visibility.Collapsed;
+        MappingPage.Visibility = workspace && _selectedDevice?.DeviceKey is not null ? Visibility.Visible : Visibility.Collapsed;
+        InspectorEmpty.Visibility = MappingPage.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        DevicesPage.Visibility = workspace ? Visibility.Visible : Visibility.Collapsed;
         AboutPage.Visibility = page == "about" ? Visibility.Visible : Visibility.Collapsed;
         ProfilesPage.Visibility = page == "profiles" ? Visibility.Visible : Visibility.Collapsed;
         AppearancePage.Visibility = page == "appearance" ? Visibility.Visible : Visibility.Collapsed;
-        if (page == "mappings")
+        if (workspace && _selectedDevice?.DeviceKey is not null)
         {
             _selectedDevice ??= GlobalDeviceCard();
             DeviceHeading.Text = _selectedDevice.Name;
             HeroMouse.SetResourceReference(MouseIllustration.AccentProperty, "Accent");
-            DeviceScopeCheck.IsEnabled = _selectedDevice.DeviceKey is not null && _service?.HasDeviceRouting == true;
+            DeviceScopeCheck.IsEnabled = _selectedDevice.DeviceKey is not null && (_service?.HasDeviceRouting == true || _service?.CanTriggerCircleForDevice(_selectedDevice.DeviceKey) == true);
             DeviceScopeHint.Text = _service?.CanRouteDevice(_selectedDevice.Key) == true ? "Actions apply only to this mouse." : "Your settings are saved for this mouse. Complete device setup to activate.";
             ImportPreviousButton.Visibility = _settings.Profiles.Any(p => p.DeviceKey is null && p.ApplicationPath is null && p.Bindings.Any(b => b.Action.Kind != ActionKind.Passthrough)) ? Visibility.Visible : Visibility.Collapsed;
         }
         else CloseEditor();
         if (page == "setup") UpdateSetupStatus();
         MappingsNav.Visibility = Visibility.Visible;
-        foreach (var (navigation, selected) in new[] { (MappingsNav, page == "mappings"), (DevicesNav, page == "devices"), (ProfilesNav, page == "profiles"), (AboutNav, page == "about"), (AppearanceNav, page is "appearance" or "setup"), (SetupNav, page == "setup") })
+        foreach (var (navigation, selected) in new[] { (DevicesNav, workspace), (ProfilesNav, page == "profiles"), (AboutNav, page == "about"), (AppearanceNav, page is "appearance" or "setup"), (SetupNav, page == "setup") })
         {
             navigation.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, selected ? "Ink" : "Muted");
             navigation.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
-            navigation.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, selected ? "Selection" : "Panel");
-            navigation.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, selected ? "Accent" : "Panel");
+            navigation.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, selected ? "Selection" : "Sidebar");
+            navigation.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, selected ? "Accent" : "Sidebar");
             navigation.BorderThickness = new Thickness(selected && (navigation == DevicesNav || navigation == ProfilesNav || navigation == AppearanceNav || navigation == AboutNav) ? 3 : 0, 0, 0, 0);
         }
         PageTitle.Text = page switch { "devices" => "Devices", "about" => "Help", "profiles" => "Profiles", "appearance" => "Settings", "setup" => "Input support", _ => "Customize" };
+        if (workspace) SetInspectorTab(ButtonsContent.Visibility == Visibility.Collapsed);
     }
     private void RefreshDevices_Click(object sender, RoutedEventArgs e) => RefreshDevices();
     private void RefreshDevices()
@@ -702,19 +715,7 @@ public partial class MainWindow : Window
         {
             var result = await Task.Run(MouseConnectionCatalog.Enumerate);
             if (_disposed) return;
-            _connections = result; _service?.UpdateDeviceInventory(result);
-            SyncDeviceRows(_deviceCards, result.Where(d => !d.IsAuxiliary));
-            SyncDeviceRows(_additionalDevices, result.Where(d => d.IsAuxiliary));
-            AdditionalDevicesList.ItemsSource = _additionalDevices;
-            AdditionalDevicesExpander.Visibility = _additionalDevices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            UpdateDeviceActivity();
-            DevicesSubtitle.Text = $"{_deviceCards.Count} mouse connections · {_additionalDevices.Count} additional interfaces";
-            DevicesList.ItemsSource = result.Select(d => new DeviceRow(d.Name, d.Transport + " · " + d.DevicePaths.Length + " input interfaces")).ToArray();
-            DriverProfilesList.ItemsSource = _service?.HasDeviceRouting == true
-                ? _service.DeviceSources.Select(source => new DeviceCard(source.Key, source.Name, "DEVICE PROFILE",
-                    "Routing source · not a connection indicator", ThemeManager.Brush("Accent"), source.Key)).ToArray() : [];
-            EmptyDevicesBox.Visibility = _deviceCards.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            PresenceDetails.Text = "USB and Bluetooth inputs reported by Windows. Multiple interfaces from one device are grouped. Receiver presence cannot confirm wireless mouse power; recent input identifies the connection in use. Updated " + DateTime.Now.ToString("HH:mm:ss") + ".";
+            ApplyConnectionInventory(result);
         }
         catch (Exception ex)
         {
@@ -733,6 +734,7 @@ public partial class MainWindow : Window
         if (sender is not System.Windows.Controls.Button { Tag: DeviceCard device }) return;
         if (device.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse. Previous shared assignments are kept for import."; return; }
         _selectedDevice = device;
+        _editingSavedProfile = false;
         var profile = _settings.Profiles.FirstOrDefault(p => p.DeviceKey == device.DeviceKey && p.ApplicationPath is null);
         if (profile is null)
         {
@@ -744,7 +746,7 @@ public partial class MainWindow : Window
         _loading = true; _deviceScope = true; DeviceScopeCheck.IsChecked = true; ShowAuxiliaryCheck.IsChecked = false; ShowAuxiliaryCheck.IsEnabled = false; _loading = false;
         _editingProfileId = profile.Id;
         foreach (var row in _deviceCards) row.IsSelected = row.DeviceKey == device.DeviceKey;
-        PopulateProfiles(); RefreshBindings(); CloseEditor(); ShowPage("mappings");
+        PopulateProfiles(); RefreshBindings(); CloseEditor(); ButtonsContent.Visibility = Visibility.Visible; ShowPage("mappings");
     }
 
     private void MouseCallout_Click(object sender, RoutedEventArgs e)
@@ -754,15 +756,15 @@ public partial class MainWindow : Window
         LoadSelectedBinding();
         OpenEditor();
     }
-    private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; }
-    private void CloseEditor() { EditorPane.Visibility = Visibility.Collapsed; }
+    private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; CircleSummary.Visibility = Visibility.Collapsed; CircleFooter.Visibility = Visibility.Collapsed; ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
+    private void CloseEditor() { EditorPane.Visibility = Visibility.Collapsed; SourceExpander.Visibility = Visibility.Visible; UpdateCircleSummaryVisibility(); CircleFooter.Visibility = Visibility.Visible; }
     private void CloseEditor_Click(object sender, RoutedEventArgs e) => CloseEditor();
 
     private void DeviceScope_Changed(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
         string? key = _selectedDevice?.DeviceKey;
-        if (DeviceScopeCheck.IsChecked == true && (key is null || _service?.HasDeviceRouting != true))
+        if (DeviceScopeCheck.IsChecked == true && (key is null || !(_service?.HasDeviceRouting == true || _service?.CanTriggerCircleForDevice(key) == true)))
         { _loading = true; DeviceScopeCheck.IsChecked = false; _loading = false; return; }
         _deviceScope = DeviceScopeCheck.IsChecked == true;
         var profile = _deviceScope ? _settings.Profiles.FirstOrDefault(p => p.DeviceKey == key && p.ApplicationPath is null)
@@ -792,7 +794,7 @@ public partial class MainWindow : Window
     private void OpenRing(IReadOnlyList<RingSlot> slots, RingRequest? request)
     {
         CloseRingVisual(); _ringPreview = request is null;
-        var window = new RingWindow(slots, _ringPreview); _ringWindow = window;
+        var window = new RingWindow(slots, _ringPreview, request?.Driverless == true); _ringWindow = window;
         window.Invoked += (_, invocation) =>
         {
             if (request is not null) _service?.InvokeRingAction(request.Id, invocation);
@@ -894,6 +896,7 @@ public partial class MainWindow : Window
     private sealed record BindingRow(MouseControl? Mouse, int? VirtualKey, string Name, string Summary, Guid? LearnedId = null)
     {
         public string Number => Mouse switch { MouseControl.LeftButton => "1", MouseControl.RightButton => "2", MouseControl.MiddleButton => "3", MouseControl.XButton2 => "4", MouseControl.XButton1 => "5", _ => "·" };
+        public string Glyph => Mouse switch { MouseControl.XButton1 => "\uE72B", MouseControl.XButton2 => "\uE72A", MouseControl.WheelUp => "\uE74A", MouseControl.WheelDown => "\uE74B", MouseControl.WheelLeft => "\uE76B", MouseControl.WheelRight => "\uE76C", _ => "\uE962" };
     }
     private sealed record ActionChoice(ActionKind Kind, string Name) { public override string ToString() => Name; }
     private sealed record MouseChoice(MouseControl Control, string Name) { public override string ToString() => Name; }
@@ -901,6 +904,7 @@ public partial class MainWindow : Window
     private sealed record DeviceCard(string Key, string Name, string Manufacturer, string Detail, Brush Accent, string? DeviceKey = null) : INotifyPropertyChanged
     {
         public bool CanEdit => DeviceKey is not null;
+        public string ConnectionLabel => Detail.Contains("receiver", StringComparison.OrdinalIgnoreCase) ? "Receiver connected" : "Windows connection";
         private string _activity = "No input observed yet";
         public string Activity { get => _activity; set { if (_activity == value) return; _activity = value; PropertyChanged?.Invoke(this, new(nameof(Activity))); } }
         private bool _selected;

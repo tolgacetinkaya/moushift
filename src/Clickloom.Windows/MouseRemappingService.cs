@@ -6,12 +6,12 @@ using Clickloom.Core;
 
 namespace Clickloom.Windows;
 
-/// <summary>Driverless, device-independent standard mouse remapping. Starts disarmed.</summary>
-public sealed class MouseRemappingService : IDisposable
+/// <summary>Device-specific Circle observation with optional exclusive remapping. Starts disarmed.</summary>
+public sealed partial class MouseRemappingService : IDisposable
 {
     private sealed record RoutingSnapshot(string Name, Dictionary<MouseControl, InputAction> Actions, Dictionary<int, InputAction> AuxiliaryKeys, bool OwnWindow, long Generation, nint ForegroundWindow)
-    { public MappingProfile? Profile { get; init; } }
-    private sealed record Work(InputAction Action, bool IsRelease, bool IsHold, long Token, long Epoch, long RoutingGeneration, nint ForegroundWindow, MappingProfile? Profile = null);
+    { public MappingProfile? Profile { get; init; } public string? ApplicationPath { get; init; } }
+    private sealed record Work(InputAction Action, bool IsRelease, bool IsHold, long Token, long Epoch, long RoutingGeneration, nint ForegroundWindow, MappingProfile? Profile = null, bool DriverlessCircle = false);
     private readonly ConcurrentQueue<Work> _queue = new();
     private readonly ConcurrentQueue<MouseControl> _observations = new();
     private readonly ConcurrentQueue<int> _auxiliaryObservations = new();
@@ -73,14 +73,17 @@ public sealed class MouseRemappingService : IDisposable
     public bool CanRouteDevice(string key) => HasDeviceRouting && Volatile.Read(ref _deviceRoutes).ContainsDevice(key);
     public void UpdateDeviceInventory(IReadOnlyList<MouseConnection> connections)
     {
+        bool rawChanged;
+        lock (_settingsGate) rawChanged = _rawCircles.Update(connections);
         var next = DeviceRouteTable.Build(DeviceSources, connections);
         var previous = Volatile.Read(ref _deviceRoutes);
-        if (previous.SameAs(next)) return;
+        if (previous.SameAs(next) && !rawChanged) return;
         Volatile.Write(ref _deviceRoutes, next); _dispatchState.AdvanceRouting();
         DismissRing();
     }
     public void InvalidateDeviceRoutes()
     {
+        lock (_settingsGate) _rawCircles.Update([]);
         Volatile.Write(ref _deviceRoutes, DeviceRouteTable.Empty);
         if (_enabled) SetEnabled(false);
         _dispatchState.AdvanceRouting();
@@ -120,9 +123,14 @@ public sealed class MouseRemappingService : IDisposable
 
     public void SetRingBounds(int left, int top, int width, int height) => Volatile.Write(ref _ringBounds, new(left, top, left + width, top + height));
     public void DismissRing()
+        => DismissRing("application/selection");
+    private void DismissRing(string reason)
     {
         if (Interlocked.Exchange(ref _ringRequest, null) is not null)
+        {
+            TraceCircle("close", reason);
             NotifyRingDismissed();
+        }
     }
     private void NotifyRingDismissed() => ThreadPool.QueueUserWorkItem(_ => { try { RingDismissed?.Invoke(this, EventArgs.Empty); } catch { } });
     public bool ChooseRingAction(Guid requestId, int index)
@@ -231,7 +239,7 @@ public sealed class MouseRemappingService : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (enabled && !_running) throw new InvalidOperationException(_lastError ?? "The hook and emergency hotkey must be available before remapping is enabled.");
-        if (enabled && !HasResolvedDeviceRoutes) throw new InvalidOperationException("Separate mouse input support is required. Shared mouse remapping is disabled.");
+        if (enabled && !CanEnable) throw new InvalidOperationException("Connect a mouse and wait for Raw Input to be ready. Exclusive remapping requires optional device input support.");
         if (enabled && _deviceBackend is not null && !_deviceBackend.IsCapturing) throw new InvalidOperationException("The device input backend stopped. Restart before enabling it.");
         if (_enabled == enabled) return;
         if (!enabled) _enabled = false;
@@ -270,7 +278,7 @@ public sealed class MouseRemappingService : IDisposable
                 if (message.Id == NativeMethods.WmHotKey && message.WParam == 0x434C)
                 {
                     _enabled = false;
-                    DismissRing();
+                    DismissRing("pause hotkey");
                     _dispatchState.AdvanceEnableEpoch();
                     _wake.Set();
                     RaiseStateChanged();
@@ -426,24 +434,35 @@ public sealed class MouseRemappingService : IDisposable
                 Observe(control.Value);
                 if (IsRingOpen)
                 {
+                    if (RingActionSelection.ForwardOriginalButton(Volatile.Read(ref _ringRequest)?.Driverless == true, control.Value))
+                    {
+                        _gestures.Begin(control.Value, new(false, null, _dispatchState.Current.EnableEpoch, 0));
+                        TraceCircle("forward-original", "driverless overlay", control.Value.ToString(), true);
+                        return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam);
+                    }
                     var bounds = Volatile.Read(ref _ringBounds);
                     bool inside = bounds.Right <= bounds.Left || data.Point.X >= bounds.Left && data.Point.X < bounds.Right && data.Point.Y >= bounds.Top && data.Point.Y < bounds.Bottom;
                     var ringId = Volatile.Read(ref _ringRequest)?.Id;
-                    if (RingActionSelection.OwnPointer(control.Value, inside))
+                    if (RingActionSelection.OwnPointer(control.Value, inside, Volatile.Read(ref _ringRequest)?.Driverless == true))
                     {
-                        if (control.Value != MouseControl.LeftButton) DismissRing();
+                        if (control.Value != MouseControl.LeftButton) DismissRing("overlay button " + control.Value);
                         else if (ringId is { } pressedId) try { RingPressed?.Invoke(this, new(pressedId, data.Point.X, data.Point.Y)); } catch { DismissRing(); }
                         _gestures.Begin(control.Value, new(true, null, _dispatchState.Current.EnableEpoch, 0,
                             control.Value == MouseControl.LeftButton ? ringId : null));
                         return 1;
                     }
-                    DismissRing();
+                    DismissRing("outside " + control.Value);
                     _gestures.Begin(control.Value, new(false, null, _dispatchState.Current.EnableEpoch, 0));
                     return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam);
                 }
                 var snapshot = Volatile.Read(ref _snapshot);
                 var stamp = _dispatchState.Current;
                 var epoch = stamp.EnableEpoch;
+                if (DriverlessCircleMode)
+                {
+                    _gestures.Begin(control.Value, new(false, null, epoch, 0));
+                    return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam);
+                }
                 snapshot.Actions.TryGetValue(control.Value, out var action);
                 bool bypassOwnWindow = OwnWindowPolicy.ShouldBypass(snapshot.OwnWindow, control.Value, action,
                     Volatile.Read(ref _captureSession) is not null);
@@ -469,8 +488,15 @@ public sealed class MouseRemappingService : IDisposable
             }
             else if (message is 0x20A or 0x20E)
             {
-                if (IsRingOpen) { if (message == 0x20A) ScrollRing(unchecked((short)(data.MouseData >> 16))); return 1; }
-                if (HandleWheel(message == 0x20E, unchecked((short)(data.MouseData >> 16)))) return 1;
+                if (IsRingOpen)
+                {
+                    var bounds = Volatile.Read(ref _ringBounds);
+                    bool inside = bounds.Right > bounds.Left && data.Point.X >= bounds.Left && data.Point.X < bounds.Right && data.Point.Y >= bounds.Top && data.Point.Y < bounds.Bottom;
+                    if (Volatile.Read(ref _ringRequest)?.Driverless == true && !inside)
+                    { DismissRing("outside wheel"); return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam); }
+                    if (message == 0x20A) ScrollRing(unchecked((short)(data.MouseData >> 16))); return 1;
+                }
+                if (!DriverlessCircleMode && HandleWheel(message == 0x20E, unchecked((short)(data.MouseData >> 16)))) return 1;
             }
         }
         catch (Exception exception) { DisarmFromHook("Mouse processing paused: " + exception.Message); }
@@ -669,10 +695,12 @@ public sealed class MouseRemappingService : IDisposable
                 }
                 var profile = work.Profile ?? Volatile.Read(ref _snapshot).Profile;
                 if (profile is null) break;
-                var request = new RingRequest(Guid.NewGuid(), work.ForegroundWindow, work.Epoch, work.RoutingGeneration, profile.RingSlots.Select(slot => slot.DeepClone()).ToArray(), work.Token, profile.DeviceKey);
+                var request = new RingRequest(Guid.NewGuid(), work.ForegroundWindow, work.Epoch, work.RoutingGeneration, profile.RingSlots.Select(slot => slot.DeepClone()).ToArray(), work.Token, profile.DeviceKey, work.DriverlessCircle);
                 _ringWheelRemainder = 0;
                 Volatile.Write(ref _ringBounds, new(0, 0, 0, 0));
                 Volatile.Write(ref _ringRequest, request);
+                TraceCircle("open", profile.DeviceName ?? "Mouse");
+                if (work.DriverlessCircle) Interlocked.Increment(ref _rawCircleTriggerCount);
                 try { RingRequested?.Invoke(this, request); } catch { DismissRing(); throw; }
                 break;
             case ActionKind.Shortcut: SendShortcut(action); break;
@@ -856,8 +884,8 @@ public sealed class MouseRemappingService : IDisposable
                     // Anonymous mouse/keyboard-hook input must never execute shared mappings.
                     var actions = new Dictionary<MouseControl, InputAction>();
                     var auxiliary = new Dictionary<int, InputAction>();
-                    Volatile.Write(ref _snapshot, new(name, actions, auxiliary, ownWindow, stamp.RoutingGeneration, hwnd) { Profile = profile });
-                    if (Volatile.Read(ref _ringRequest) is { } ring && ring.RoutingGeneration != stamp.RoutingGeneration) DismissRing();
+                    Volatile.Write(ref _snapshot, new(name, actions, auxiliary, ownWindow, stamp.RoutingGeneration, hwnd) { Profile = profile, ApplicationPath = path });
+                    if (Volatile.Read(ref _ringRequest) is { } ring && ring.RoutingGeneration != stamp.RoutingGeneration) DismissRing("foreground/settings changed");
                 }
             }
             var display = path is null ? "Unknown" : Path.GetFileName(path);

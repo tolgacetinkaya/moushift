@@ -17,6 +17,8 @@ try {
     }
     Copy-Item -LiteralPath 'README.md','LICENSE' -Destination $payload
     Copy-Item -LiteralPath 'docs/KNOWN_LIMITS.md' -Destination (Join-Path $payload 'KNOWN_LIMITS.md')
+    Copy-Item -LiteralPath 'docs/INPUT_SUPPORT_SETUP.md' -Destination (Join-Path $payload 'INPUT_SUPPORT_SETUP.md')
+    Copy-Item -LiteralPath 'docs/DRIVERLESS_CIRCLE.md' -Destination (Join-Path $payload 'DRIVERLESS_CIRCLE.md')
     $output = Join-Path $packageRoot 'artifacts/release'
     New-Item -ItemType Directory -Path $output -Force | Out-Null
     $archive = Join-Path $output ('Clickloom-' + $version + '-win-x64.zip')
