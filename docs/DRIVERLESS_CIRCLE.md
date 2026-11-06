@@ -1,15 +1,15 @@
 # Driverless Click Circle on Windows
 
-The standard-button Circle trigger uses built-in Windows Raw Input and the existing non-activating Circle overlay. It needs no downloaded package, Interception library, kernel driver, device firmware write, or manufacturer-specific adapter.
+The standard-button and horizontal-wheel Circle trigger uses built-in Windows Raw Input and the existing non-activating Circle overlay. It needs no downloaded package, Interception library, kernel driver, device firmware write, or manufacturer-specific adapter.
 
 ## Use
 
-1. Select a connected mouse, assign Click Circle to a standard button, and Apply. Existing Circle assignments are reused.
+1. Select a connected mouse, assign Click Circle to a standard button or horizontal wheel direction, and Apply. Existing Circle assignments are reused.
 2. Click Enable Circle. The app always starts paused.
 3. Switch to another application and press that physical mouse button once.
 4. Click a Circle action or folder; click outside to dismiss. Hold-to-release selection is reserved for exclusive input support.
 
-Only the five standard mouse buttons can trigger this mode. The original trigger also reaches Windows: a middle-button trigger can still start the foreground application's autoscroll, for example. Ordinary button remaps, wheel triggers, anonymous F13–F24 keys, and learned custom HID assignment drafts are not activated by Enable Circle.
+The five standard mouse buttons and standard horizontal wheel directions can trigger this mode. An assigned middle button replaces its normal desktop click with Circle. Other buttons and horizontal-wheel triggers still retain their original behavior. Ordinary button remaps, vertical wheel triggers, anonymous F13–F24 keys, and learned custom HID assignment drafts are not activated by Enable Circle.
 
 ## Input and profile isolation
 
@@ -20,7 +20,9 @@ Only the five standard mouse buttons can trigger this mode. The original trigger
 - Only a resolved Circle binding enters the action queue. Other saved button actions remain untouched and inactive in this mode. Runtime profiles/slots are detached copies.
 - Held repeats do not reopen a Circle. Press ownership survives pause and unchanged inventory polls, while disconnection removes the source/held state. Ambiguous sources are rejected.
 - The service, emergency pause shortcut, Raw Input registration, and at least one mapped connection must be ready before activation. Learning pauses the service. Connection changes invalidate pending work and pause activation.
-- The original trigger is not suppressed. The existing mouse hook owns left clicks within the open Circle and adjustment scrolling within its bounds; unrelated outside clicks and standard trigger buttons retain their normal behavior.
+- While enabled, a middle-button gate blocks physical legacy middle DOWN/UP messages. Raw Input routes each actual source: an assigned middle-button Circle consumes the cycle; other middle clicks are replayed with the application's injection marker. No last-active-device or timestamp-based source inference is used. This forwarding is synthetic input, not an exclusive hardware filter.
+- Native replay preserves held ownership across multiple mice and pause; profile changes cannot change a cycle already in progress. Activation waits for a neutral middle button. Disconnect, receiver failure and shutdown release owned output. A bounded 25 ms raw/hook handoff pauses and fails open if source delivery stalls. Delayed native DOWNs are discarded after a foreground-window change; owned UPs are still released.
+- The existing mouse hook owns left clicks within the open Circle and adjustment scrolling within its bounds. Unrelated outside clicks and other standard trigger buttons retain their normal behavior.
 - The original non-left button is forwarded without dismissing the driverless overlay. Raw Input can open the Circle before that same button reaches the separate mouse-hook thread; treating that later hook event as an outside click would immediately close the new Circle. Closing and reopening are covered by a replay of this observed event order.
 - Foreground window, settings generation and enable epoch are checked before opening a Circle or running one of its selected actions. Switching windows cancels stale work.
 
@@ -32,6 +34,8 @@ When the developer explicitly supplies an absolute `CLICKLOOM_DIAGNOSTICS_FILE`,
 
 For physical validation, use one intentional left click and one middle click separated by two seconds, then leave all buttons untouched. A rapid close must be distinguished between a physical extra click, original middle-button behavior, and foreground/settings cancellation before calling it a hardware defect. A short down/up/down interval alone is not proof of a faulty switch.
 
-Left/right triggers retain their original application focus/context-menu effects and may therefore cancel the Circle through a real foreground change. Middle or side buttons are recommended for the first physical tests. Per-mouse identification does not remove these original effects.
+Left/right triggers retain their original application focus/context-menu effects and may therefore cancel the Circle through a real foreground change. Middle clicks use the replacement/forwarding gate. Applications using their own Raw Input can still see physical packets; applications that reject synthetic input or run at a higher integrity level may not accept replay. This mode does not claim game-level or elevated-application suppression.
 
 The optional exclusive remapping setup guide is separate: [INPUT_SUPPORT_SETUP.md](INPUT_SUPPORT_SETUP.md).
+
+Horizontal wheel deltas are accumulated to 120 and same-direction repeats are grouped using a 300 ms quiet interval. Original horizontal scrolling remains. See [the suppression comparison](INPUT_SUPPRESSION_RESEARCH.md) for implementation details and limitations.

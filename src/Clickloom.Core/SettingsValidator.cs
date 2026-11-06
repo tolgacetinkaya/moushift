@@ -30,6 +30,7 @@ public static class SettingsValidator
             if (string.IsNullOrWhiteSpace(control.DeviceKey) || control.DeviceKey.Length > 512 || control.DeviceKey.Contains('\0')) errors.Add("A learned control needs a valid source mouse.");
             if (string.IsNullOrWhiteSpace(control.Name) || control.Name.Length > 48) errors.Add("Learned button names require 1–48 characters.");
             if (!double.IsFinite(control.X) || !double.IsFinite(control.Y) || control.X is < 0 or > 1 || control.Y is < 0 or > 1) errors.Add("Button positions must be inside the mouse drawing.");
+            if (!Enum.IsDefined(control.View)) errors.Add("Unknown mouse drawing view.");
             if (control.Identity is not { } input || input.Endpoint is null || input.Endpoint.Length != 64 || !input.Endpoint.All(Uri.IsHexDigit)
                 || !Enum.IsDefined(input.Kind) || input.Usage == 0 || input.Direction is < -1 or > 1
                 || input.Kind == LearnedInputKind.Wheel && input.Direction == 0)

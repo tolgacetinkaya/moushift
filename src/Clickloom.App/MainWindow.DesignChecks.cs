@@ -20,6 +20,11 @@ public partial class MainWindow
         if (args.Contains("--edit-positions") && args.Contains("--edit-button")) PrepareDesignButtonEditor();
         if (args.Contains("--edit-circle")) OpenCircleWorkspace();
         if (args.Contains("--teach-button")) PrepareLearningWorkspaceFixture();
+        if (args.Contains("--left-side"))
+        {
+            LeftViewButton.IsChecked = true;
+            _learningEditor?.SelectView(MouseDrawingView.Left);
+        }
         UpdateLayout(); PlaceMarkers();
         if (_circleEditor is not null && args.Contains("--folder")) _circleEditor.ShowFolderPreview();
         if (_circleEditor is not null && args.Contains("--drag-preview")) { UpdateLayout(); _circleEditor.ShowDragPresentationPreview(); }
@@ -48,8 +53,20 @@ public partial class MainWindow
         if (DeviceHeading.Text != b.Name || DetailHeading.Text != b.Name || EditingProfile.DeviceKey != b.DeviceKey || DevicesPage.Visibility != Visibility.Collapsed
             || DeviceDetailPage.Visibility != Visibility.Visible || MappingPage.Visibility != Visibility.Visible || DeviceInspector.Visibility != Visibility.Visible)
             throw new InvalidOperationException("A card did not open only its mouse in the center with its settings on the right.");
-        if (!ReferenceEquals(DetailBatteryInfo.Content, b) || b.BatteryLabel != "60%" || a.BatteryLabel != "Battery unavailable")
+        if (!ReferenceEquals(DetailBatteryInfo.Content, b) || b.BatteryLabel != "60%" || a.BatteryVisibility != Visibility.Collapsed || b.BatteryVisibility != Visibility.Visible)
             throw new InvalidOperationException("Battery information did not follow the selected device or invented a missing percentage.");
+        b.BatteryPercent = null;
+        if (b.BatteryVisibility != Visibility.Collapsed || b.BatteryLabel.Length != 0) throw new InvalidOperationException("Missing battery left a badge or placeholder.");
+        b.BatteryPercent = 0;
+        if (b.BatteryVisibility != Visibility.Visible || b.BatteryLabel != "0%") throw new InvalidOperationException("An empty battery was hidden as unknown.");
+        b.BatteryPercent = 60;
+        LeftViewButton.IsChecked = true; UpdateLayout(); PlaceMarkers();
+        if (HeroMouse.View != MouseDrawingView.Left || RightCallout.Visibility != Visibility.Collapsed || BackCallout.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Side elevation did not show the accessible buttons.");
+        var sideAnchor = HeroMouse.NormalizedAnchor(.26, .61);
+        if (!HeroMouse.TryNormalize(sideAnchor, out double sx, out double sy) || Math.Abs(sx - .26) > .0001 || Math.Abs(sy - .61) > .0001)
+            throw new InvalidOperationException("Side-view position transforms changed the saved coordinate.");
+        TopViewButton.IsChecked = true;
         DeviceCard_Click(new Button { Tag = a }, new RoutedEventArgs());
         // Both fixture profiles now exist. Selecting / browsing / theming must be read-only.
         byte[] before = File.ReadAllBytes(_store.FilePath);

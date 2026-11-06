@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace Clickloom.Core;
 
 public enum LearnedInputKind { MouseButton, Wheel, KeyboardKey, HidButton }
+public enum MouseDrawingView { Top, Left }
 
 public sealed record InputIdentity(string Endpoint, LearnedInputKind Kind, ushort UsagePage, ushort Usage, byte ReportId = 0, ushort Collection = 0, int Direction = 0)
 {
@@ -24,8 +25,9 @@ public sealed class LearnedControl
     public InputIdentity Identity { get; set; } = new("", LearnedInputKind.HidButton, 0, 0);
     public double X { get; set; } = .5;
     public double Y { get; set; } = .5;
+    public MouseDrawingView View { get; set; }
     public DateTimeOffset ObservedAt { get; set; }
-    public LearnedControl DeepClone() => new() { Id = Id, DeviceKey = DeviceKey, Name = Name, Identity = Identity with { }, X = X, Y = Y, ObservedAt = ObservedAt };
+    public LearnedControl DeepClone() => new() { Id = Id, DeviceKey = DeviceKey, Name = Name, Identity = Identity with { }, X = X, Y = Y, View = View, ObservedAt = ObservedAt };
 }
 
 public sealed class LearnedBinding

@@ -532,11 +532,14 @@ static void LearnInputSession()
 static void LearnedPersistence() => WithStore((store, _) =>
 {
     var settings = AppSettings.CreateDefault(); var device = ProfileResolver.CreateDeviceDefault("mouse:a", "A"); settings.Profiles.Add(device);
-    var control = new LearnedControl { DeviceKey = "mouse:a", Name = "Sniper", Identity = new(new string('B', 64), LearnedInputKind.HidButton, 9, 8, 2), X = .22, Y = .63, ObservedAt = DateTimeOffset.UtcNow };
+    var control = new LearnedControl { DeviceKey = "mouse:a", Name = "Sniper", Identity = new(new string('B', 64), LearnedInputKind.HidButton, 9, 8, 2), X = .22, Y = .63, View = MouseDrawingView.Left, ObservedAt = DateTimeOffset.UtcNow };
     var next = LearnedControls.Save(settings, control); next.Profiles.Single(p => p.Id == device.Id).LearnedBindings.Add(new() { ControlId = control.Id, Action = new() { Kind = ActionKind.Ring } });
     store.Save(next); var loaded = store.Load();
     Require(loaded.Warning is null && loaded.Settings.LearnedControls.Single().Identity.Key == control.Identity.Key && loaded.Settings.LearnedControls[0].X == .22 && loaded.Settings.LearnedControls[0].Y == .63, "Learned identity/position did not survive storage.");
     Require(settings.LearnedControls.Count == 0, "Learning mutated the source settings.");
+    Require(loaded.Settings.LearnedControls[0].View == MouseDrawingView.Left, "Side elevation did not survive save/reload.");
+    var legacy = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(control))!.AsObject(); legacy.Remove("View");
+    Require(System.Text.Json.JsonSerializer.Deserialize<LearnedControl>(legacy.ToJsonString())!.View == MouseDrawingView.Top, "Old coordinates moved to the side elevation.");
     var clone = loaded.Settings.DeepClone(); clone.LearnedControls[0].Name = "Changed";
     Require(loaded.Settings.LearnedControls[0].Name == "Sniper", "Clones share learned metadata.");
     var reset = ProfileDefaults.ResetButtons(loaded.Settings, device.Id);
@@ -551,6 +554,7 @@ static void LearnedValidation()
     var saved = LearnedControls.Save(settings, relearn);
     Require(saved.LearnedControls.Single().Id == control.Id && saved.Profiles.Single(p => p.Id == a.Id).LearnedBindings.Single().ControlId == control.Id, "Relearning orphaned assignments.");
     Require(SettingsValidator.Validate(saved).Count == 0, "Valid learned controls rejected.");
+    saved.LearnedControls[0].View = (MouseDrawingView)99; Require(SettingsValidator.Validate(saved).Count > 0, "Unknown drawing elevation accepted."); saved.LearnedControls[0].View = MouseDrawingView.Top;
     saved.LearnedControls[0].X = double.NaN; Require(SettingsValidator.Validate(saved).Count > 0, "NaN position accepted."); saved.LearnedControls[0].X = 2; Require(SettingsValidator.Validate(saved).Count > 0, "Off-artwork position accepted."); saved.LearnedControls[0].X = .4;
     saved.Profiles.Single(p => p.Id == b.Id).LearnedBindings.Add(new() { ControlId = control.Id }); Require(SettingsValidator.Validate(saved).Count > 0, "Another mouse used a learned input.");
 }

@@ -37,11 +37,12 @@ internal static class ThemeManager
             ["Bg"] = dark ? "#202126" : "#E9EBF0", ["Panel"] = dark ? "#27282E" : "#FFFFFF",
             ["Sidebar"] = dark ? "#222329" : "#E9EBF0", ["PanelLight"] = dark ? "#303138" : "#F3F4F7",
             ["Line"] = dark ? "#42444E" : "#CCD0D9", ["Ink"] = dark ? "#F2F2F5" : "#20232B",
-            ["Muted"] = dark ? "#B5B7C2" : "#616672", ["Accent"] = dark ? "#D79CB1" : "#7D344A",
-            ["Selection"] = dark ? "#46323E" : "#E3D9E0", ["Hover"] = dark ? "#35363F" : "#E0E3EB",
-            ["PrimaryFill"] = dark ? "#A84F6D" : "#7D344A", ["PrimaryInk"] = "#FFFFFF",
+            ["Muted"] = dark ? "#B5B7C2" : "#616672", ["Accent"] = dark ? "#45FFBA" : "#006747",
+            // 0x40 alpha is 25% opacity (75% transparency); labels and outlines stay opaque.
+            ["Selection"] = dark ? "#4045FFBA" : "#4000B87C", ["Hover"] = dark ? "#35363F" : "#E0E3EB",
+            ["PrimaryFill"] = dark ? "#4045FFBA" : "#4000B87C", ["PrimaryInk"] = dark ? "#FFFFFF" : "#005C40",
             ["MetalEdge"] = dark ? "#42444E" : "#CCD0D9", ["Metal"] = dark ? "#222329" : "#E9EBF0",
-            ["RingIdle"] = dark ? "#F027282E" : "#F5FFFFFF", ["RingSelection"] = dark ? "#4DD79CB1" : "#357D344A",
+            ["RingIdle"] = dark ? "#F027282E" : "#F5FFFFFF", ["RingSelection"] = dark ? "#4045FFBA" : "#4000B87C",
             ["Danger"] = dark ? "#FFA1AA" : "#B0293F"
         };
         // An expression keeps these brushes unfrozen. WPF templates otherwise freeze a brush

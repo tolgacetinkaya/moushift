@@ -20,6 +20,7 @@ public partial class MainWindow
             _activitySource = HwndSource.FromHwnd(handle);
             _deviceActivity = new RawMouseActivity(handle);
             _deviceActivity.ButtonObserved += (_, input) => _service?.ObserveRawMouseButton(input);
+            _deviceActivity.WheelObserved += (_, input) => _service?.ObserveRawMouseWheel(input);
             _service?.SetRawInputAvailable(true);
             _deviceActivity.Observed += (_, path) =>
             {

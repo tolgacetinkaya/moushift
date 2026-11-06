@@ -33,6 +33,10 @@ internal sealed partial class HidLearningWindow : Window
     private double _x, _y;
     private bool _position, _closed, _discovering, _discoveryStarted, _rescanPending, _connected = true;
     private long _expires;
+    private long _armedAt;
+    private readonly TextBlock _progress = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 6, 0, 12) };
+    private readonly RadioButton _topView = new() { Content = "Top view", IsChecked = true, Margin = new(0, 0, 6, 0) };
+    private readonly RadioButton _leftView = new() { Content = "Left side" };
     internal LearnedControl? Result { get; private set; }
     public HidLearningWindow(MouseConnection connection, IEnumerable<LearnedControl> existing,
         Func<IReadOnlyList<HidEndpoint>, Action<ObservedControl>, Action<string>, IDisposable>? begin, bool preview = false)
@@ -49,7 +53,13 @@ internal sealed partial class HidLearningWindow : Window
         _save.Style = (Style)FindResource("Primary"); _save.Click += (_, _) => Save(); buttons.Children.Add(_save);
         DockPanel.SetDock(buttons, Dock.Right); footer.Children.Add(buttons); footer.Children.Add(T("Saved locally · No device settings are changed", 11, "Muted")); DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer);
         var body = new Grid(); body.ColumnDefinitions.Add(new() { Width = new(390) }); body.ColumnDefinitions.Add(new());
-        var left = new Grid(); left.RowDefinitions.Add(new() { Height = GridLength.Auto }); left.RowDefinitions.Add(new()); left.RowDefinitions.Add(new() { Height = GridLength.Auto }); left.Children.Add(T("1   Choose its position", 16));
+        var left = new Grid(); left.RowDefinitions.Add(new() { Height = GridLength.Auto }); left.RowDefinitions.Add(new()); left.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        var positionHeader = new StackPanel(); positionHeader.Children.Add(T("1   Choose its position", 16));
+        var views = new StackPanel { Orientation = Orientation.Horizontal, Margin = new(0, 14, 0, 8) };
+        views.Children.Add(_topView); views.Children.Add(_leftView); positionHeader.Children.Add(views); left.Children.Add(positionHeader);
+        _topView.Style = _leftView.Style = (Style)FindResource("ViewChoice");
+        _topView.Checked += (_, _) => ChangeView(MouseDrawingView.Top);
+        _leftView.Checked += (_, _) => ChangeView(MouseDrawingView.Left);
         Canvas.SetLeft(_drawing, 20); Canvas.SetTop(_drawing, 10); _picture.Children.Add(_drawing);
         _marker.Fill = B("RingSelection"); _marker.Stroke = B("Accent"); _picture.Children.Add(_marker);
         var drawingView = new Viewbox { Child = _picture, Stretch = Stretch.Uniform, MaxWidth = 360, MinHeight = 220 }; Grid.SetRow(drawingView, 1); left.Children.Add(drawingView);
@@ -59,9 +69,10 @@ internal sealed partial class HidLearningWindow : Window
         var form = new StackPanel { Margin = new(20, 0, 0, 0) };
         form.Children.Add(T("2   Press the physical button", 16)); form.Children.Add(T("Release all buttons, click Listen, then press the same physical button twice. Original hardware functions still occur while learning.", 12, "Muted"));
         _listen.Margin = new(0, 15, 0, 14); _listen.Click += (_, _) => { if (_capture is null) Listen(); else Stop("Listening cancelled."); }; form.Children.Add(_listen);
-        var rescan = new Button { Content = "Rescan inputs", HorizontalAlignment = HorizontalAlignment.Left, Margin = new(0, 0, 0, 12) };
-        rescan.Click += async (_, _) => { Stop("Rescanning inputs…"); await Discover(); }; form.Children.Add(rescan);
+        var rescan = new Button { Content = "Refresh input discovery", ToolTip = "Refresh available interfaces. To learn a press, use Listen for button.", HorizontalAlignment = HorizontalAlignment.Left, Margin = new(0, 0, 0, 12) };
+        rescan.Click += async (_, _) => { Stop("Refreshing available interfaces…"); await Discover(); }; form.Children.Add(rescan);
         _status.Foreground = B("Muted"); _status.Text = "Choose a point on the drawing first."; form.Children.Add(_status);
+        _progress.Foreground = B("Accent"); form.Children.Add(_progress);
         _detected.Margin = new(0, 16, 0, 14); form.Children.Add(_detected);
         form.Children.Add(T("3   Name this button", 16)); _name.Margin = new(0, 10, 0, 12); form.Children.Add(_name);
         System.Windows.Automation.AutomationProperties.SetName(_name, "Learned button name");
@@ -70,7 +81,7 @@ internal sealed partial class HidLearningWindow : Window
         var fresh = new Button { Content = "+ New button", HorizontalAlignment = HorizontalAlignment.Left, Margin = new(0, 8, 0, 0) };
         fresh.Click += (_, _) => { Stop(""); _saved.SelectedIndex = -1; _identity = null; _id = Guid.NewGuid(); _position = false; _marker.Visibility = Visibility.Collapsed; _listen.IsEnabled = false; _save.IsEnabled = false; _name.Text = "Extra button"; _detected.Text = "No input learned yet"; _status.Text = "Choose a new position on the drawing."; }; form.Children.Add(fresh);
         var scroll = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; Grid.SetColumn(scroll, 1); body.Children.Add(scroll); root.Children.Add(body); Content = root;
-        _timer.Tick += (_, _) => { if (_capture is HidInputCapture { IsDisposed: true } capture) Stop(capture.StopReason ?? "Input observation ended. Choose Listen to retry."); else if (_capture is not null && Environment.TickCount64 >= _expires) Stop("No confirmed input. Try again; a firmware-only button may send no accessible event."); };
+        _timer.Tick += (_, _) => UpdateListeningProgress();
         root.Loaded += async (_, _) => { if (!_preview && !_discoveryStarted) await Discover(); }; Closed += (_, _) => { _closed = true; Stop(""); };
     }
     private async Task Discover()
@@ -80,11 +91,15 @@ internal sealed partial class HidLearningWindow : Window
         _discoveryStarted = _discovering = true; _listen.IsEnabled = false;
         try
         {
-            var endpoints = await Task.Run(HidInventory.Enumerate); if (_closed) return;
+            var inventory = await Task.Run(() => { var items = HidInventory.Enumerate(out var diagnostics); return (items, diagnostics); }); if (_closed) return;
+            var endpoints = inventory.items;
             _endpoints = endpoints.Where(e => e.PhysicalKey.Equals(_connection.Key, StringComparison.OrdinalIgnoreCase)).ToArray();
             int buttons = _endpoints.Sum(e => e.Buttons.Sum(b => b.Count));
             _capabilities.Text = $"{_endpoints.Count} associated HID collections · {buttons} declared button usages\nMouse buttons/wheel are observed through Windows Raw Input. Declared usages are not proof that every button produces an accessible event.\nOnly selected-connection inputs are used. Ordinary keyboard typing is ignored.";
             if (_endpoints.Any(e => e.CapabilityError.Length > 0)) _capabilities.Text += "\nSome collections have no readable button capabilities.";
+            if (endpoints.Count == 0 && inventory.diagnostics.Any(d => d.StartsWith("Open failures: ") && d.Length > "Open failures: ".Length))
+                _status.Text = "Extra HID interfaces could not be opened. Standard buttons can still be tested with Listen; this does not prove that your extra button sends no signal.";
+            else _status.Text = $"Discovery complete: {_endpoints.Count} interfaces for this mouse. " + (_position ? "Choose Listen for button to capture a press." : "Choose a position, then Listen for button.");
         }
         catch (Exception e) { if (!_closed) _capabilities.Text = "Descriptor discovery unavailable: " + e.Message + "\nStandard mouse learning can still be attempted."; }
         finally
@@ -108,7 +123,8 @@ internal sealed partial class HidLearningWindow : Window
     {
         if (!_position || _closed || _discovering || !_connected) return;
         if (_begin is null) { _status.Text = "Input observation is unavailable in this preview."; return; }
-        _identity = null; _save.IsEnabled = false; _session = new(_connection.Key, Environment.TickCount64 + 350); _expires = Environment.TickCount64 + 25000;
+        _identity = null; _save.IsEnabled = false; _detected.Text = "No button signal yet";
+        _armedAt = Environment.TickCount64 + 600; _session = new(_connection.Key, _armedAt); _expires = _armedAt + 30000;
         try { _capture = _begin(_endpoints, Observe, message => { if (!_closed) _status.Text = message; }); _listen.Content = "Listening… Cancel"; _status.Text = "Press the same button twice. Moushift does not block its original function."; _timer.Start(); }
         catch (Exception e) { Stop("Cannot start input learning: " + e.Message); }
     }
@@ -125,12 +141,12 @@ internal sealed partial class HidLearningWindow : Window
         _save.IsEnabled = true;
     }
     private void LoadSaved(LearnedControl control)
-    { Stop(""); _id = control.Id; _identity = control.Identity; _observedAt = control.ObservedAt; _name.Text = control.Name; PickPosition(control.X, control.Y); _detected.Text = Label(control.Identity) + " · previously confirmed"; _save.IsEnabled = true; }
-    private void Stop(string message) { _capture?.Dispose(); _capture = null; _session = null; _timer.Stop(); _listen.Content = "Listen for button"; if (message.Length > 0) _status.Text = message; }
+    { Stop(""); SelectView(control.View); _id = control.Id; _identity = control.Identity; _observedAt = control.ObservedAt; _name.Text = control.Name; PickPosition(control.X, control.Y); _detected.Text = Label(control.Identity) + " · previously confirmed"; _save.IsEnabled = true; }
+    private void Stop(string message) { _capture?.Dispose(); _capture = null; _session = null; _timer.Stop(); _progress.Text = ""; _listen.Content = "Listen for button"; if (message.Length > 0) _status.Text = message; }
     private LearnedControl? BuildResult()
     {
         if (!_position || _identity is null || string.IsNullOrWhiteSpace(_name.Text)) return null;
-        return new() { Id = _id, DeviceKey = _connection.Key, Name = _name.Text.Trim(), Identity = _identity, X = _x, Y = _y, ObservedAt = _observedAt };
+        return new() { Id = _id, DeviceKey = _connection.Key, Name = _name.Text.Trim(), Identity = _identity, X = _x, Y = _y, View = _drawing.View, ObservedAt = _observedAt };
     }
     private void Save() { Result = BuildResult(); if (Result is null) { _status.Text = "Choose a position, confirm an input and enter a name."; return; } Stop(""); if (_hostedSave is not null) _hostedSave(Result); else DialogResult = true; }
     private static string Label(InputIdentity input) => input.StandardControl is { } control ? InputPresentation.Name(control)

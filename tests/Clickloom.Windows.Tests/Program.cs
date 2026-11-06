@@ -58,6 +58,12 @@ if (args.Contains("--hid-inventory"))
 // by the native service, without starting hooks or injecting keyboard/mouse input.
 var tests = new (string Name, Action Run)[]
 {
+    ("middle gate isolates Circle and native cycles for two mice", MiddleGateIsolation),
+    ("middle gate preserves native holds across concurrent mice and pause", MiddleGateHolds),
+    ("middle gate does not capture a cycle already in progress", MiddleGateActivation),
+    ("middle gate cleans up disconnected sources and reset", MiddleGateCleanup),
+    ("middle receiver handoff rejects stale delivery and fails open", MiddleGateDelivery),
+    ("horizontal tilt resolves exact source, accumulates detents and coalesces repeats", RawCircleHorizontalWheel),
     ("driverless Circle uses exact input source and executes only Circle bindings", RawCircleIsolation),
     ("driverless Circle resolves application and manual Circle profiles", RawCircleProfiles),
     ("driverless Circle retains press ownership across pause and connection refresh", RawCircleLifecycle),
@@ -119,6 +125,121 @@ foreach (var (name, run) in tests)
 }
 Console.WriteLine($"{tests.Length - failures}/{tests.Length} passed; no hooks started or input injected.");
 return failures == 0 ? 0 : 1;
+
+static void MiddleGateDelivery()
+{
+    // Exercise the service's actual thread handoff without installing hooks or injecting input.
+    // Circle-only raw decisions do not enqueue native replay in this isolated service.
+    using var service = new MouseRemappingService();
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var type = typeof(MouseRemappingService);
+    var gate = (DriverlessMiddleGate)type.GetField("_middleGate", flags)!.GetValue(service)!;
+    var raw = type.GetMethod("RouteRawMiddle", flags)!;
+    var hook = type.GetMethod("BlockNativeMiddle", flags)!;
+    gate.Request(true);
+    raw.Invoke(service, ["a", true, true, (nint)0]);
+    Require((bool)hook.Invoke(service, [true])!, "Delivered raw down did not allow suppression.");
+    raw.Invoke(service, ["a", false, false, (nint)0]);
+    Require((bool)hook.Invoke(service, [false])!, "Delivered raw up was not suppressed.");
+    var elapsed = System.Diagnostics.Stopwatch.StartNew();
+    Require(!(bool)hook.Invoke(service, [true])!, "Stale delivery proof swallowed a different click.");
+    Require(!gate.Capturing && service.LastError?.Contains("delivery is delayed") == true, "Missing source did not stop capture.");
+    Require(elapsed.Elapsed < TimeSpan.FromSeconds(1), "Missing receiver blocked the hook indefinitely.");
+}
+
+static void MiddleGateIsolation()
+{
+    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    Require(gate.Capturing, "Neutral gate did not arm.");
+    Require(gate.Raw("a", true, true) == new MiddleGateResult(true, null), "Assigned source did not choose Circle only.");
+    Require(gate.Hook(true), "Assigned physical down leaked.");
+    Require(gate.Raw("b", true, false) == new MiddleGateResult(false, true), "Other mouse lost native down.");
+    Require(gate.Hook(true), "Replayed native down also passed through physically.");
+    Require(gate.Raw("A", true, true) == default, "Repeated source down fired twice.");
+    Require(gate.Raw("a", false, false) == default && gate.Hook(false), "Circle release leaked or released another mouse.");
+    Require(gate.Raw("b", false, true) == new MiddleGateResult(false, false) && gate.Hook(false), "Native cycle changed with profile edits.");
+    Require(gate.Raw("a", true, false).NativePressed == true && gate.Hook(true), "Changed assignment did not restore native input.");
+    Require(gate.Raw("a", false, false).NativePressed == false && gate.Hook(false), "Restored native release lost.");
+}
+
+static void MiddleGateHolds()
+{
+    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    Require(gate.Raw("a", true, false).NativePressed == true && gate.Hook(true), "First native hold lost.");
+    Require(gate.Raw("b", true, false).NativePressed is null && gate.Hook(true), "Second owner duplicated native down.");
+    gate.Request(false);
+    Require(gate.Capturing, "Pause released ownership before physical release.");
+    Require(gate.Raw("a", false, false).NativePressed is null && gate.Hook(false), "First owner released second owner.");
+    Require(gate.Raw("b", false, false).NativePressed == false && gate.Hook(false), "Final owned up leaked.");
+    Require(!gate.Capturing, "Pause did not stop after balanced release.");
+    Require(gate.Raw("a", true, true) == default && !gate.Hook(true), "Paused Circle swallowed native input.");
+    Require(gate.Raw("a", false, false) == default && !gate.Hook(false), "Paused up was captured.");
+}
+
+static void MiddleGateActivation()
+{
+    var gate = new DriverlessMiddleGate();
+    gate.Raw("a", true, false); Require(!gate.Hook(true), "Inactive down blocked.");
+    gate.Request(true, true); Require(!gate.Capturing, "Armed halfway through a physical hold.");
+    Require(gate.Raw("a", false, true) == default && !gate.Hook(false), "Bypass cycle was taken over.");
+    gate.Request(true); Require(gate.Capturing, "Could not arm after release.");
+    Require(gate.Hook(true), "Hook-before-raw down was not blocked while capturing.");
+    Require(gate.Raw("a", true, false).NativePressed == true, "Late raw down was lost.");
+    gate.Request(false); Require(gate.Hook(false), "Hook-before-raw up leaked.");
+    Require(gate.Raw("a", false, false).NativePressed == false && !gate.Capturing, "Late raw release did not drain pause.");
+}
+
+static void MiddleGateCleanup()
+{
+    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    gate.Raw("a", true, false); gate.Hook(true);
+    gate.Raw("b", true, true); gate.Hook(true);
+    Require(!gate.RemoveSources(new HashSet<string>(["a", "b", "c"], StringComparer.OrdinalIgnoreCase)), "Unrelated arrival released native hold.");
+    Require(!gate.RemoveSources(new HashSet<string>(["a"], StringComparer.OrdinalIgnoreCase)), "Removing Circle owner released native mouse.");
+    Require(gate.RemoveSources(new HashSet<string>()), "Disconnect did not request native release.");
+    gate.Reset(); Require(!gate.Capturing && !gate.Hook(false), "Reset left suppression active.");
+    gate.Request(true); Require(gate.Raw("a", true, true).Circle && gate.Hook(true), "Reconnect retained old cycle.");
+}
+
+static void RawCircleHorizontalWheel()
+{
+    Require(RawMouseActivity.DecodeHorizontalWheel(0x800, 120) == 120, "Right delta lost.");
+    Require(RawMouseActivity.DecodeHorizontalWheel(0x800, unchecked((ushort)-120)) == -120, "Signed left delta lost.");
+    Require(RawMouseActivity.DecodeHorizontalWheel(0x400, 120) is null && RawMouseActivity.DecodeHorizontalWheel(0x800, 0) is null, "Vertical or zero packet became horizontal tilt.");
+    var settings = AppSettings.CreateDefault();
+    var profile = ProfileResolver.CreateDeviceDefault("a", "A");
+    foreach (var input in new[] { MouseControl.WheelLeft, MouseControl.WheelRight })
+        profile.Bindings.Single(b => b.Input == input).Action = new() { Kind = ActionKind.Ring };
+    settings.Profiles.Add(profile);
+    var app = profile.DeepClone(); app.Id = Guid.NewGuid(); app.ApplicationPath = @"C:\test\editor.exe";
+    app.Bindings.Single(b => b.Input == MouseControl.WheelLeft).Action = new() { Kind = ActionKind.Disabled };
+    settings.Profiles.Add(app);
+    var router = new RawCircleRouter();
+    var connection = new MouseConnection("a", "A", "TEST", "USB", true, false, ["path"]);
+    router.Update([connection, connection with { Key = "b", DevicePaths = ["other"] }]);
+    Require(router.Wheel(settings, "unknown", 120, true, null, 0) is null, "Unknown source triggered.");
+    Require(router.Wheel(settings, "other", 120, true, null, 0) is null, "Another mouse inherited tilt assignment.");
+    Require(router.Wheel(settings, "path", 60, true, null, 0) is null, "Fractional wheel packet triggered early.");
+    Require(router.Wheel(settings, "PATH", 60, true, null, 10)?.Id == profile.Id, "Accumulated right tilt failed.");
+    Require(router.Wheel(settings, "path", 120, true, null, 80) is null, "Held tilt repeated.");
+    Require(router.Wheel(settings, "path", -120, true, null, 100)?.Id == profile.Id, "Opposite direction lost.");
+    Require(router.Wheel(settings, "path", -120, true, app.ApplicationPath, 500) is null, "Disabled application override ignored.");
+    Require(router.Wheel(settings, "path", 60, true, null, 900) is null, "Fractional input triggered.");
+    Require(router.Wheel(settings, "path", 60, true, app.ApplicationPath, 910) is null, "Partial gesture crossed foreground scope.");
+    Require(router.Wheel(settings, "path", 120, false, null, 1400) is null, "Paused input triggered.");
+    Require(router.Wheel(settings, "path", 120, true, null, 1410) is null, "Enable mid-gesture triggered.");
+    Require(router.Wheel(settings, "path", 120, true, null, 1800) is not null, "Fresh tilt did not reopen.");
+    router.Update([connection, connection with { Key = "b", DevicePaths = ["other"] }, connection with { Key = "c", DevicePaths = ["third"] }]);
+    Require(router.Wheel(settings, "path", 120, true, null, 1810) is null, "Unrelated device arrival reset held tilt.");
+    router.Update([connection]);
+    Require(router.Wheel(settings, "path", 120, true, null, 1820) is null, "Unrelated device removal reset held tilt.");
+    router.Update([]);
+    Require(router.Wheel(settings, "path", 120, true, null, 2200) is null, "Removed source triggered.");
+    router.Update([connection]);
+    Require(router.Wheel(settings, "path", 120, true, null, 2210) is not null, "Reconnect retained stale burst.");
+    Require(RingActionSelection.ForwardOriginalWheel(true, true), "Tilt hook can close its own raw-triggered Circle.");
+    Require(!RingActionSelection.ForwardOriginalWheel(true, false) && !RingActionSelection.ForwardOriginalWheel(false, true), "Wheel ownership changed outside driverless tilt.");
+}
 
 static void RawCircleIsolation()
 {

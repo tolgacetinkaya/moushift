@@ -61,7 +61,19 @@ internal sealed partial class HidLearningWindow
         if (_capture is not null || _listen.IsEnabled) throw new InvalidOperationException("A disconnected mouse retained a listener.");
         UpdateConnection(_connection); Listen();
         if (_capture is null) throw new InvalidOperationException("Listen did not recover after reconnect.");
-        Stop("Ready to listen again."); PreparePreview();
+        Stop(""); SelectView(MouseDrawingView.Left); PickPosition(.26, .61);
+        _identity = identity; _save.IsEnabled = true;
+        if (BuildResult()?.View != MouseDrawingView.Left) throw new InvalidOperationException("Left-side position lost its elevation.");
+        SelectView(MouseDrawingView.Top);
+        if (_position || _save.IsEnabled || _listen.IsEnabled) throw new InvalidOperationException("Switching elevation silently reused old coordinates.");
+        SelectView(MouseDrawingView.Left); PickPosition(.26, .61); Listen();
+        _session = new(_connection.Key, 0); _armedAt = 0; _expires = Environment.TickCount64 - 1;
+        UpdateListeningProgress();
+        if (_capture is not null || !_status.Text.Contains("No input received")) throw new InvalidOperationException("No-input timeout did not explain retry.");
+        Listen(); _session = new(_connection.Key, 0); Observe(new(_connection.Key, identity, true, false));
+        _armedAt = 0; _expires = Environment.TickCount64 - 1; UpdateListeningProgress();
+        if (_capture is not null || !_status.Text.StartsWith("One press received")) throw new InvalidOperationException("Partial confirmation was reported as no input.");
+        SelectView(MouseDrawingView.Top); Stop("Ready to listen again."); PreparePreview();
         Console.WriteLine("PASS embedded learning: explicit Listen, selected-source two presses, cancel/retry, disconnect/reconnect, no secondary window or input injection.");
     }
 }

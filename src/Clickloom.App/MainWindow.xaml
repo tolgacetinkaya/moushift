@@ -6,7 +6,7 @@
     <Visibility x:Key="SidebarLabelVisibility">Visible</Visibility>
     <Thickness x:Key="SidebarIconMargin">0,0,12,0</Thickness>
     <DataTemplate x:Key="BatteryBadge">
-      <StackPanel Orientation="Horizontal" ToolTip="{Binding BatteryDescription}">
+      <StackPanel Orientation="Horizontal" ToolTip="{Binding BatteryDescription}" Visibility="{Binding BatteryVisibility}">
         <Grid Width="30" Height="14" Margin="0,0,9,0">
           <Border Width="26" Height="12" HorizontalAlignment="Left" BorderBrush="{DynamicResource Muted}" BorderThickness="1" CornerRadius="2"/>
           <Border Width="2" Height="5" HorizontalAlignment="Right" Background="{DynamicResource Muted}" CornerRadius="1"/>
@@ -54,7 +54,7 @@
             <TextBlock Text="{Binding ConnectionLabel}" Foreground="{DynamicResource Muted}" FontSize="10" TextAlignment="Center" Margin="0,4,0,0"/>
           </StackPanel>
           <Border Grid.Row="4" Margin="0,22,0,0"><local:MouseIllustration x:Name="DeviceTileArtwork" Accent="{DynamicResource Accent}"/></Border>
-          <ContentControl Grid.Row="5" Content="{Binding}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <ContentControl Grid.Row="5" Content="{Binding}" Visibility="{Binding BatteryVisibility}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Grid>
       </Button>
       <DataTemplate.Triggers><DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter TargetName="SelectedCheck" Property="Opacity" Value="1"/><Setter TargetName="SelectedLine" Property="Opacity" Value="1"/></DataTrigger></DataTemplate.Triggers>
@@ -71,8 +71,10 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="13">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Border Background="{DynamicResource Panel}" CornerRadius="13">
+              <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="13">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
             </Border>
           </ControlTemplate>
         </Setter.Value>
@@ -99,7 +101,7 @@
       </Grid.ColumnDefinitions>
       <Border x:Name="ThemeTitleBar" Grid.ColumnSpan="2" Background="{DynamicResource Metal}" BorderBrush="{DynamicResource MetalEdge}" BorderThickness="0,0,0,1">
         <Grid>
-          <StackPanel Orientation="Horizontal" Margin="18,0"><Border Width="32" Height="32" CornerRadius="9" Background="{DynamicResource PrimaryFill}"><TextBlock Text="M" FontSize="20" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center"/></Border><TextBlock Text="Moushift" FontSize="23" FontWeight="SemiBold" Margin="12,0,0,0" Visibility="{DynamicResource SidebarLabelVisibility}"/></StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="18,0"><local:BrandMark Width="36" Height="36" Foreground="{DynamicResource Accent}"/><TextBlock Text="Moushift" FontSize="23" FontWeight="SemiBold" Margin="12,0,0,0" Visibility="{DynamicResource SidebarLabelVisibility}"/></StackPanel>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <TextBlock x:Name="EngineBadge" Text="Paused" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,0,16,0"/>
             <Button x:Name="EnableButton" Content="Enable Circle" Click="Enable_Click" MinWidth="104" Margin="0,0,25,0" BorderBrush="{DynamicResource Ink}"/>
@@ -183,7 +185,7 @@
             </Grid>
             <Grid x:Name="DeviceDetailPage" Visibility="Collapsed" Margin="28,24,24,16">
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-              <StackPanel><Button Content="‹  All mice" Click="BackToGallery_Click" HorizontalAlignment="Left" Margin="0,0,0,18"/><TextBlock x:Name="DetailHeading" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap"/><ContentControl x:Name="DetailBatteryInfo" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Left" Margin="0,10,0,8"/><TextBlock Text="Choose a button on the drawing to edit its assignment." Style="{StaticResource Caption}" Margin="0,8,0,8"/></StackPanel>
+              <StackPanel><Button Content="‹  All mice" Click="BackToGallery_Click" HorizontalAlignment="Left" Margin="0,0,0,18"/><TextBlock x:Name="DetailHeading" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap"/><ContentControl x:Name="DetailBatteryInfo" Visibility="{Binding Content.BatteryVisibility, RelativeSource={RelativeSource Self}}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Left" Margin="0,10,0,8"/><TextBlock Text="Choose a button on the drawing to edit its assignment." Style="{StaticResource Caption}" Margin="0,8,0,8"/></StackPanel>
               <Grid Grid.Row="1">                <Grid x:Name="DiagramPane">
                   <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
@@ -208,7 +210,13 @@
                       <TextBlock x:Name="BackCalloutAction" />
                     </StackPanel>
                   </Grid>
-                  <Button Grid.Row="1" x:Name="IdentifyButton" Content="Teach a button" Click="IdentifyInput_Click" Style="{StaticResource Primary}" HorizontalAlignment="Center" Padding="18,10" MinWidth="160" MinHeight="40" FontSize="14" AutomationProperties.Name="Teach a button" />
+                  <StackPanel Grid.Row="1" HorizontalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+                      <RadioButton x:Name="TopViewButton" Content="Top view" Style="{StaticResource ViewChoice}" GroupName="MouseView" IsChecked="True" Checked="MouseView_Changed" Margin="0,0,6,0"/>
+                      <RadioButton x:Name="LeftViewButton" Content="Left side" Style="{StaticResource ViewChoice}" GroupName="MouseView" Checked="MouseView_Changed"/>
+                    </StackPanel>
+                    <Button x:Name="IdentifyButton" Content="Teach a button" Click="IdentifyInput_Click" Style="{StaticResource Primary}" HorizontalAlignment="Center" Padding="18,10" MinWidth="160" MinHeight="40" FontSize="14" AutomationProperties.Name="Teach a button" />
+                  </StackPanel>
                   <Expander Grid.Row="2" x:Name="ScopeExpander" Header="Input support" Margin="0,8,0,0">
                     <StackPanel>
                       <TextBlock x:Name="ScopeLabel" Style="{StaticResource Caption}" />
@@ -417,7 +425,7 @@
             <Border Style="{StaticResource Surface}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Margin="0,0,70,0"><TextBlock Text="Device input support" FontWeight="SemiBold"/><TextBlock Text="Driverless Circle · optional exclusive remapping" Style="{StaticResource Caption}" Margin="0,6,0,0"/></StackPanel><TextBlock x:Name="SetupBackendState" Grid.Column="1" Text="Checking input" Foreground="{DynamicResource Muted}"/></Grid></Border>
             <ItemsControl x:Name="SetupConnectionRows" Margin="0,18,0,20"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="16,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Margin="0,0,30,0"/><TextBlock Text="{Binding Routing}" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="12"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
             <StackPanel Orientation="Horizontal"><Button Content="Setup details" Click="SetupGuide_Click"/><Button Content="Use existing installation…" Click="SelectInputLibrary_Click" Style="{StaticResource Quiet}" Margin="12,0,0,0"/></StackPanel>
-            <Expander x:Name="SetupGuideExpander" Header="How device support works" Margin="0,20,0,0"><TextBlock Text="Driverless Click Circle uses Windows Raw Input to identify the exact mouse. Assign Click Circle to one of its five standard buttons, press Enable Circle, then test outside the editor. The original click still reaches the other application. Click a Circle action to run it.&#10;&#10;Other button assignments, wheel triggers and custom HID assignment drafts are not activated by this mode. Exclusive remapping uses the optional device input backend. Moushift never guesses a source from the last mouse moved and never installs a driver automatically." Style="{StaticResource Caption}" Margin="4,12,0,0" MaxWidth="680"/></Expander>
+            <Expander x:Name="SetupGuideExpander" Header="How device support works" Margin="0,20,0,0"><TextBlock Text="Driverless Click Circle uses Windows Raw Input to identify the exact mouse. Assign Click Circle to one of its five standard buttons or horizontal wheel directions, press Enable Circle, then test outside the editor. The original click still reaches the other application. Click a Circle action to run it.&#10;&#10;Other button assignments, vertical wheel triggers and custom HID assignment drafts are not activated by this mode. Exclusive remapping uses the optional device input backend. Moushift never guesses a source from the last mouse moved and never installs a driver automatically." Style="{StaticResource Caption}" Margin="4,12,0,0" MaxWidth="680"/></Expander>
           </StackPanel></ScrollViewer>
           <ScrollViewer x:Name="AppearancePage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32">
             <StackPanel MaxWidth="880" HorizontalAlignment="Left">
@@ -464,7 +472,7 @@
               <Border Style="{StaticResource Surface}" Margin="0,22,0,0">
                 <StackPanel>
                   <TextBlock Text="Devices and profile scope" FontSize="19" FontWeight="SemiBold" />
-                  <TextBlock Text="Each mouse uses its own profile. A mouse without a matching profile keeps its normal buttons. Driverless mode activates only standard-button Click Circle assignments; original clicks remain and other saved actions stay inactive. The device list shows Windows connections; receiver presence does not confirm mouse power.&#10;&#10;Extra HID inputs can be learned and positioned. Their assignment drafts are not live. DPI, lighting, and onboard memory are managed by the vendor app." Style="{StaticResource Caption}" Margin="0,13,0,0" />
+                  <TextBlock Text="Each mouse uses its own profile. A mouse without a matching profile keeps its normal buttons. Driverless mode activates standard-button and horizontal-wheel Click Circle assignments; original clicks remain and other saved actions stay inactive. The device list shows Windows connections; receiver presence does not confirm mouse power.&#10;&#10;Extra HID inputs can be learned and positioned. Their assignment drafts are not live. DPI, lighting, and onboard memory are managed by the vendor app." Style="{StaticResource Caption}" Margin="0,13,0,0" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource Surface}" Margin="0,22,0,0">

@@ -1,5 +1,7 @@
 # Moushift
 
+<img src="docs/branding/moushift-mark.svg" width="72" alt="Moushift star-cutout M logo">
+
 A Windows mouse configuration workspace with per-connection profiles, an editable Click Circle, and generic HID button discovery and learning. Built with .NET 10 / WPF, without third-party NuGet packages.
 
 **Preview software.** HID discovery and learning are separate from exclusive input remapping. A learned input is not automatically an intercepted or remappable input. This preview does not claim support for every physical button on every mouse.
@@ -26,13 +28,13 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 | Button learning | Standard mouse buttons/wheel, declared HID button usages, and F13–F24 from associated interfaces |
 | Firmware-only buttons | Cannot be learned when no accessible event is emitted |
 | Physical button location | Chosen manually on the drawing; HID does not supply universal diagram coordinates |
-| Driverless Click Circle | Five standard buttons, exact source mouse and foreground app profile; original trigger still reaches Windows |
+| Driverless Click Circle | Standard buttons and horizontal tilt, exact mouse/app profiles; assigned middle clicks replace native clicks |
 | Standard live remapping | Optional Interception backend for exclusive remapping; separate installation and verified source routing |
 | Arbitrary learned HID remapping | Not implemented; assignments are explicitly stored as inactive drafts |
 | Receiver identity | A receiver may represent multiple devices; its presence does not prove mouse power or uniquely identify a paired mouse |
 | Manufacturer-specific protocols | Not used for generic discovery/learning; no vendor output/feature reports are sent |
 
-The app starts paused. With connected Raw Input sources it offers **Enable Circle**, requiring no driver. This mode activates only standard-button Circle bindings; other assignments remain inactive and the original trigger reaches Windows. Custom HID and wheel triggers are not live in this mode. No driver is bundled or automatically installed.
+The app starts paused. With connected Raw Input sources it offers **Enable Circle**, requiring no driver. Standard-button and horizontal-tilt Circle bindings are live; other assignments remain inactive. Assigned middle clicks replace native desktop clicks, while other mice's middle clicks are forwarded as tagged synthetic input. Other trigger buttons retain their original behavior. Custom HID and vertical-wheel triggers are not live in this mode. No driver is bundled or automatically installed. See [driverless limits](docs/DRIVERLESS_CIRCLE.md) for Raw Input applications and elevated-window restrictions.
 
 ## Run
 

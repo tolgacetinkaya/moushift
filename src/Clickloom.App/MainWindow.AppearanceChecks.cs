@@ -22,8 +22,11 @@ public partial class MainWindow
             ThemeManager.Initialize(null);
             if (ThemeManager.Current != id) throw new InvalidOperationException("Appearance did not survive reload.");
             var accent = (SolidColorBrush)ThemeManager.Brush("Accent");
-            if (accent.Color != (Color)ColorConverter.ConvertFromString(id == "dark" ? "#D79CB1" : "#7D344A"))
+            if (accent.Color != (Color)ColorConverter.ConvertFromString(id == "dark" ? "#45FFBA" : "#006747"))
                 throw new InvalidOperationException("Accent does not match the approved theme.");
+            foreach (string fill in new[] { "Selection", "PrimaryFill", "RingSelection" })
+                if (((SolidColorBrush)ThemeManager.Brush(fill)).Color.A != 64)
+                    throw new InvalidOperationException("Selection fill must remain 75% transparent.");
             if (((SolidColorBrush)DevicesNav.Background).Color != ((SolidColorBrush)ThemeManager.Brush("Selection")).Color)
                 throw new InvalidOperationException("Navigation kept the previous theme after a live switch.");
         }

@@ -370,6 +370,8 @@ public partial class MainWindow : Window
         SavedActionText.Text = "Saved: " + (action.Kind == ActionKind.Passthrough ? "Default behavior" : DescribeAction(action));
         ApplyBindingButton.Content = row.LearnedId is not null ? "Save draft" : "Apply";
         if (row.LearnedId is not null) SavedActionText.Text = "Draft: " + DescribeAction(action) + " · not active";
+        else if (action.Kind == ActionKind.Ring && !(EditingProfile.DeviceKey is { } routeKey && _service?.CanRouteDevice(routeKey) == true))
+            SavedActionText.Text = "Saved: Click Circle + original input";
         if (row.Mouse is { } inheritedMouse && EditingProfile.ApplicationPath is not null && action.Kind == ActionKind.Ring
             && EditingProfile.Bindings.FirstOrDefault(b => b.Input == inheritedMouse)?.Action.Kind is null or ActionKind.Passthrough)
             SavedActionText.Text = "Inherited from General: Click Circle";
@@ -408,7 +410,7 @@ public partial class MainWindow : Window
             ActionKind.Text => "Types text into the focused application.",
             ActionKind.LaunchApplication => "Opens your selected local application.",
             ActionKind.Ring => EditingProfile.DeviceKey is { } key && _service?.CanRouteDevice(key) == true ? "Opens the Click Circle beside your pointer."
-                : "Driverless mode keeps this button’s original click active in other applications. Click Circle does not replace it. Exclusive input support is required to suppress it for this mouse.",
+                : "Circle opens alongside the original input. This mode does not replace the input. Per-mouse replacement requires exclusive input support; no driver is installed automatically.",
             _ => ""
         };
     }
@@ -586,7 +588,7 @@ public partial class MainWindow : Window
             }
             _service.SetEnabled(!_service.IsEnabled);
             StatusText.Text = _service.IsEnabled
-                ? _service.DriverlessCircleMode ? "Click Circle enabled for each mouse · Original button functions are retained. Other assignments stay inactive."
+                ? _service.DriverlessCircleMode ? "Click Circle enabled for each mouse · Assigned middle clicks are replaced. Other middle clicks are forwarded."
                     : "Assignments enabled · Your saved actions are active."
                 : "Assignments paused · Normal mouse behavior.";
             UpdateEngineState();
@@ -662,7 +664,7 @@ public partial class MainWindow : Window
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
         }
         if (DateTime.UtcNow - _lastInputShown > TimeSpan.FromSeconds(4))
-            InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? _service.DriverlessCircleMode ? "Driverless Circle · Original input retained" : "Per-mouse assignments enabled" : "Paused";
+            InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? _service.DriverlessCircleMode ? "Per-mouse Circle · Middle-click routing" : "Per-mouse assignments enabled" : "Paused";
     }
 
     private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
@@ -856,17 +858,11 @@ public partial class MainWindow : Window
 
     private void CreateTray()
     {
-        using var image = new System.Drawing.Bitmap(32, 32);
-        using (var graphics = System.Drawing.Graphics.FromImage(image))
-        {
-            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            graphics.Clear(System.Drawing.Color.Transparent);
-            using var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(125, 52, 74));
-            graphics.FillEllipse(brush, 1, 1, 30, 30);
-            using var font = new System.Drawing.Font("Segoe UI", 19, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
-            using var format = new System.Drawing.StringFormat { Alignment = System.Drawing.StringAlignment.Center, LineAlignment = System.Drawing.StringAlignment.Center };
-            graphics.DrawString("M", font, System.Drawing.Brushes.White, new System.Drawing.RectangleF(0, 0, 32, 32), format);
-        }
+        Icon = BrandMark.Bitmap(64);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(BrandMark.Bitmap(64)));
+        using var stream = new System.IO.MemoryStream(); encoder.Save(stream); stream.Position = 0;
+        using var image = new System.Drawing.Bitmap(stream);
         nint icon = image.GetHicon();
         try { using var temporary = System.Drawing.Icon.FromHandle(icon); _trayIcon = (System.Drawing.Icon)temporary.Clone(); }
         finally { DestroyIcon(icon); }
@@ -927,10 +923,11 @@ public partial class MainWindow : Window
             {
                 var next = value is >= 0 and <= 100 ? value : null;
                 if (_batteryPercent == next) return; _batteryPercent = next;
-                foreach (string name in new[] { nameof(BatteryPercent), nameof(BatteryLabel), nameof(BatteryFillWidth), nameof(BatteryDescription) }) PropertyChanged?.Invoke(this, new(name));
+                foreach (string name in new[] { nameof(BatteryPercent), nameof(BatteryLabel), nameof(BatteryFillWidth), nameof(BatteryDescription), nameof(BatteryVisibility) }) PropertyChanged?.Invoke(this, new(name));
             }
         }
-        public string BatteryLabel => BatteryPercent is { } value ? value + "%" : "Battery unavailable";
+        public Visibility BatteryVisibility => BatteryPercent is null ? Visibility.Collapsed : Visibility.Visible;
+        public string BatteryLabel => BatteryPercent is { } value ? value + "%" : "";
         public double BatteryFillWidth => (BatteryPercent ?? 0) * .22;
         public string BatteryDescription => BatteryPercent is not null
             ? "Battery level reported by Windows; it may be cached and does not confirm mouse power."
