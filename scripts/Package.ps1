@@ -23,6 +23,20 @@ try {
     New-Item -ItemType Directory -Path $output -Force | Out-Null
     $archive = Join-Path $output ('Moushift-' + $version + '-win-x64.zip')
     Compress-Archive -LiteralPath $payload -DestinationPath $archive -Force
+    $expectedFiles = @('Moushift.exe','Moushift.dll','Clickloom.Core.dll','Clickloom.Windows.dll','Moushift.deps.json','Moushift.runtimeconfig.json','README.md','LICENSE','KNOWN_LIMITS.md','INPUT_SUPPORT_SETUP.md','DRIVERLESS_CIRCLE.md')
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        $entries = @($zip.Entries | Where-Object { $_.Name })
+        if ($entries.Count -ne $expectedFiles.Count) { throw 'Unexpected portable ZIP contents.' }
+        foreach ($entry in $entries) {
+            if ($entry.Name -notin $expectedFiles -or $entry.FullName.Replace('\','/') -ne ('Moushift-' + $version + '/' + $entry.Name)) { throw ('Unexpected ZIP path: ' + $entry.FullName) }
+            $inputStream = $entry.Open()
+            $hasher = [Security.Cryptography.SHA256]::Create()
+            try { $entryHash = [Convert]::ToHexString($hasher.ComputeHash($inputStream)) }
+            finally { $hasher.Dispose(); $inputStream.Dispose() }
+            if ($entryHash -ne (Get-FileHash -LiteralPath (Join-Path $payload $entry.Name) -Algorithm SHA256).Hash) { throw ('ZIP file failed integrity check: ' + $entry.Name) }
+        }
+    } finally { $zip.Dispose() }
     $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText((Join-Path $output 'SHA256SUMS.txt'), $hash + '  ' + (Split-Path $archive -Leaf) + "`n")
     Write-Output ('Portable preview: ' + $archive)

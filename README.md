@@ -70,6 +70,6 @@ Do not attach personal profiles, device serials, raw device paths or unreviewed 
 
 ## Project workflow
 
-Issue forms cover bugs and undetected inputs. Pull requests run Windows build/tests/offscreen previews. Tagged releases run verification and produce a **draft prerelease**, including a portable ZIP and SHA-256 checksum; publishing is a separate maintainer action. CI and remote releases are not claimed to have run before the repository is published.
+Issue forms cover bugs and undetected inputs. Pull requests run Windows build/tests/offscreen previews. Release tags and `release/v<version>-preview.<number>` branches run verification and produce a **draft prerelease**, including a portable ZIP and SHA-256 checksum; publishing is a separate maintainer action. The workflow also supports a manual preview-tag input. Published releases are never overwritten by the draft helper.
 
 See [release notes](docs/releases/v0.14.1-preview.md). License: [MIT](LICENSE).
