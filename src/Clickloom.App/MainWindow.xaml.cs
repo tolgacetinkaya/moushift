@@ -205,9 +205,9 @@ public partial class MainWindow : Window
                 SaveBinding_Click(this, new RoutedEventArgs());
                 ShowAuxiliaryCheck.IsChecked = true;
                 BindingsList.SelectedItem = _bindings.Single(b => b.VirtualKey == 0x7C);
-                ActionCombo.SelectedValue = ActionKind.Text; TextActionBox.Text = "Clickloom test ✓";
+                ActionCombo.SelectedValue = ActionKind.Text; TextActionBox.Text = "Moushift test ✓";
                 SaveBinding_Click(this, new RoutedEventArgs());
-                if (_store.Load().Settings.Profiles.Single(p => p.Id == _editingProfileId).AuxiliaryKeys.Single(b => b.VirtualKey == 0x7C).Action.Text != "Clickloom test ✓")
+                if (_store.Load().Settings.Profiles.Single(p => p.Id == _editingProfileId).AuxiliaryKeys.Single(b => b.VirtualKey == 0x7C).Action.Text != "Moushift test ✓")
                     throw new InvalidOperationException("Auxiliary editor roundtrip failed.");
                 ResetBinding_Click(this, new RoutedEventArgs());
                 if (_store.Load().Settings.Profiles.Single(p => p.Id == _editingProfileId).AuxiliaryKeys.Count != 0)
@@ -725,7 +725,7 @@ public partial class MainWindow : Window
         finally { Interlocked.Exchange(ref _presencePolling, 0); }
     }
 
-    private static DeviceCard GlobalDeviceCard() => new("global", "Shared assignments", "CLICKLOOM", "Global button assignments", new SolidColorBrush(Color.FromRgb(169, 158, 188)));
+    private static DeviceCard GlobalDeviceCard() => new("global", "Shared assignments", "MOUSHIFT", "Global button assignments", new SolidColorBrush(Color.FromRgb(169, 158, 188)));
     private static string DisplayDeviceName(string name) => name;
     private void SharedMappings_Click(object sender, RoutedEventArgs e) => DeviceCard_Click(new System.Windows.Controls.Button { Tag = GlobalDeviceCard() }, e);
 
@@ -849,10 +849,11 @@ public partial class MainWindow : Window
         {
             graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             graphics.Clear(System.Drawing.Color.Transparent);
-            using var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(118, 86, 213));
+            using var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(125, 52, 74));
             graphics.FillEllipse(brush, 1, 1, 30, 30);
             using var font = new System.Drawing.Font("Segoe UI", 19, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
-            graphics.DrawString("C", font, System.Drawing.Brushes.White, 7, 3);
+            using var format = new System.Drawing.StringFormat { Alignment = System.Drawing.StringAlignment.Center, LineAlignment = System.Drawing.StringAlignment.Center };
+            graphics.DrawString("M", font, System.Drawing.Brushes.White, new System.Drawing.RectangleF(0, 0, 32, 32), format);
         }
         nint icon = image.GetHicon();
         try { using var temporary = System.Drawing.Icon.FromHandle(icon); _trayIcon = (System.Drawing.Icon)temporary.Clone(); }
@@ -873,7 +874,7 @@ public partial class MainWindow : Window
         if (_exiting) return;
         if (_previewOnly) { _exiting = true; DisposeRuntime(); System.Windows.Application.Current.Shutdown(); return; }
         e.Cancel = true; Hide();
-        _tray?.ShowBalloonTip(2500, "Moushift is still running", "Choose Quit in the tray menu to close Clickloom completely.", System.Windows.Forms.ToolTipIcon.Info);
+        _tray?.ShowBalloonTip(2500, "Moushift is still running", "Choose Quit in the tray menu to close Moushift completely.", System.Windows.Forms.ToolTipIcon.Info);
     }
     private void ExitApp() { _exiting = true; DisposeRuntime(); Close(); System.Windows.Application.Current.Shutdown(); }
     private void DisposeRuntime()

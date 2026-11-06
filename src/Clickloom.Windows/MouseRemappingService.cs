@@ -191,8 +191,8 @@ public sealed partial class MouseRemappingService : IDisposable
             _deviceBackend.Faulted += (_, error) => DisarmFromHook("Device input backend stopped: " + error);
         }
         PollForeground(null);
-        _workerThread = new Thread(WorkerLoop) { IsBackground = true, Name = "Clickloom actions" };
-        _hookThread = new Thread(HookLoop) { IsBackground = true, Name = "Clickloom mouse hook" };
+        _workerThread = new Thread(WorkerLoop) { IsBackground = true, Name = "Moushift actions" };
+        _hookThread = new Thread(HookLoop) { IsBackground = true, Name = "Moushift mouse hook" };
         _workerThread.Start();
         _hookThread.Start();
         if (!_ready.Wait(TimeSpan.FromSeconds(5)))
@@ -367,7 +367,7 @@ public sealed partial class MouseRemappingService : IDisposable
                 {
                     ReleaseRingTrigger(gesture);
                     if (gesture.Action?.Kind == ActionKind.MouseButton && IsButton(gesture.Action.MouseOutput))
-                        if (!Enqueue(new Work(gesture.Action, true, true, gesture.Token, gesture.Epoch, 0, 0))) DisarmFromHook("The auxiliary release queue was full; Clickloom paused.");
+                        if (!Enqueue(new Work(gesture.Action, true, true, gesture.Token, gesture.Epoch, 0, 0))) DisarmFromHook("The auxiliary release queue was full; Moushift paused.");
                     return 1;
                 }
             }
@@ -388,7 +388,7 @@ public sealed partial class MouseRemappingService : IDisposable
                     if (action.Kind == ActionKind.Disabled || Enqueue(new(action, false, action.Kind == ActionKind.MouseButton && IsButton(action.MouseOutput), token, epoch, snapshot.Generation, snapshot.ForegroundWindow)))
                     { _keyGestures.Begin(key, new(true, action, epoch, token)); return 1; }
                     _keyGestures.Begin(key, new(false, null, epoch, 0));
-                    DisarmFromHook("The auxiliary action queue was full; Clickloom paused.");
+                    DisarmFromHook("The auxiliary action queue was full; Moushift paused.");
                 }
             }
         }
@@ -424,7 +424,7 @@ public sealed partial class MouseRemappingService : IDisposable
                             try { RingClicked?.Invoke(this, new(ringId, data.Point.X, data.Point.Y)); } catch { DismissRing(); }
                         ReleaseRingTrigger(gesture);
                         if (gesture.Action?.Kind == ActionKind.MouseButton && IsButton(gesture.Action.MouseOutput))
-                            if (!Enqueue(new Work(gesture.Action, true, true, gesture.Token, gesture.Epoch, 0, 0))) DisarmFromHook("The action queue was full; Clickloom paused and released held outputs.");
+                            if (!Enqueue(new Work(gesture.Action, true, true, gesture.Token, gesture.Epoch, 0, 0))) DisarmFromHook("The action queue was full; Moushift paused and released held outputs.");
                         return 1;
                     }
                     return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam);
@@ -484,7 +484,7 @@ public sealed partial class MouseRemappingService : IDisposable
                     return 1;
                 }
                 _gestures.Begin(control.Value, new(false, null, epoch, 0));
-                DisarmFromHook("The action queue was full; Clickloom paused.");
+                DisarmFromHook("The action queue was full; Moushift paused.");
             }
             else if (message is 0x20A or 0x20E)
             {
@@ -527,7 +527,7 @@ public sealed partial class MouseRemappingService : IDisposable
             if (!Enqueue(new Work(action, false, false, Interlocked.Increment(ref _token), epoch, snapshot.Generation, snapshot.ForegroundWindow)))
             {
                 accumulator = 0;
-                DisarmFromHook("The wheel action queue was full; Clickloom paused.");
+                DisarmFromHook("The wheel action queue was full; Moushift paused.");
                 return false;
             }
             accumulator -= Math.Sign(accumulator) * 120;
@@ -782,7 +782,7 @@ public sealed partial class MouseRemappingService : IDisposable
         var owned = modifiers.Where(key => (NativeMethods.GetAsyncKeyState(key) & 0x8000) == 0).ToList();
         var inputs = owned.Select(key => KeyInput(key, false)).ToList();
         var keyAlreadyDown = (NativeMethods.GetAsyncKeyState(action.KeyCode) & 0x8000) != 0;
-        if (keyAlreadyDown) throw new InvalidOperationException("The shortcut key is physically held; Clickloom paused rather than releasing it.");
+        if (keyAlreadyDown) throw new InvalidOperationException("The shortcut key is physically held; Moushift paused rather than releasing it.");
         inputs.Add(KeyInput(action.KeyCode, false));
         inputs.Add(KeyInput(action.KeyCode, true));
         inputs.AddRange(owned.AsEnumerable().Reverse().Select(key => KeyInput(key, true)));
@@ -799,7 +799,7 @@ public sealed partial class MouseRemappingService : IDisposable
 
     private void SendOneShot(NativeMethods.Input[] inputs)
     {
-        if (_pendingOneShotInputs.Count > 0) throw new InvalidOperationException("An earlier output still needs release; pause Clickloom before retrying.");
+        if (_pendingOneShotInputs.Count > 0) throw new InvalidOperationException("An earlier output still needs release; pause Moushift before retrying.");
         var inserted = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.Input>());
         var nativeError = Marshal.GetLastWin32Error();
         _pendingOneShotInputs.AcceptPrefix(inputs, checked((int)inserted));

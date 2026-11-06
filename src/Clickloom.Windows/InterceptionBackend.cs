@@ -75,7 +75,7 @@ internal sealed class InterceptionBackend : IDisposable
     public void Start(ProcessInput process)
     {
         if (_thread is not null) throw new InvalidOperationException("Device input is already running.");
-        _thread = new Thread(() => Run(process)) { IsBackground = true, Name = "Clickloom device input" };
+        _thread = new Thread(() => Run(process)) { IsBackground = true, Name = "Moushift device input" };
         // Mouse movement stays in Windows. Only button/wheel-bearing packets are filtered.
         _capturing = true;
         try
