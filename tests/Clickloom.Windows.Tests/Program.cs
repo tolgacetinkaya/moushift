@@ -58,6 +58,11 @@ if (args.Contains("--hid-inventory"))
 // by the native service, without starting hooks or injecting keyboard/mouse input.
 var tests = new (string Name, Action Run)[]
 {
+    ("middle gate isolates Circle and native cycles for two mice", MiddleGateIsolation),
+    ("middle gate preserves native holds across concurrent mice and pause", MiddleGateHolds),
+    ("middle gate does not capture a cycle already in progress", MiddleGateActivation),
+    ("middle gate cleans up disconnected sources and reset", MiddleGateCleanup),
+    ("middle receiver handoff rejects stale delivery and fails open", MiddleGateDelivery),
     ("horizontal tilt resolves exact source, accumulates detents and coalesces repeats", RawCircleHorizontalWheel),
     ("driverless Circle uses exact input source and executes only Circle bindings", RawCircleIsolation),
     ("driverless Circle resolves application and manual Circle profiles", RawCircleProfiles),
@@ -120,6 +125,81 @@ foreach (var (name, run) in tests)
 }
 Console.WriteLine($"{tests.Length - failures}/{tests.Length} passed; no hooks started or input injected.");
 return failures == 0 ? 0 : 1;
+
+static void MiddleGateDelivery()
+{
+    // Exercise the service's actual thread handoff without installing hooks or injecting input.
+    // Circle-only raw decisions do not enqueue native replay in this isolated service.
+    using var service = new MouseRemappingService();
+    var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    var type = typeof(MouseRemappingService);
+    var gate = (DriverlessMiddleGate)type.GetField("_middleGate", flags)!.GetValue(service)!;
+    var raw = type.GetMethod("RouteRawMiddle", flags)!;
+    var hook = type.GetMethod("BlockNativeMiddle", flags)!;
+    gate.Request(true);
+    raw.Invoke(service, ["a", true, true, (nint)0]);
+    Require((bool)hook.Invoke(service, [true])!, "Delivered raw down did not allow suppression.");
+    raw.Invoke(service, ["a", false, false, (nint)0]);
+    Require((bool)hook.Invoke(service, [false])!, "Delivered raw up was not suppressed.");
+    var elapsed = System.Diagnostics.Stopwatch.StartNew();
+    Require(!(bool)hook.Invoke(service, [true])!, "Stale delivery proof swallowed a different click.");
+    Require(!gate.Capturing && service.LastError?.Contains("delivery is delayed") == true, "Missing source did not stop capture.");
+    Require(elapsed.Elapsed < TimeSpan.FromSeconds(1), "Missing receiver blocked the hook indefinitely.");
+}
+
+static void MiddleGateIsolation()
+{
+    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    Require(gate.Capturing, "Neutral gate did not arm.");
+    Require(gate.Raw("a", true, true) == new MiddleGateResult(true, null), "Assigned source did not choose Circle only.");
+    Require(gate.Hook(true), "Assigned physical down leaked.");
+    Require(gate.Raw("b", true, false) == new MiddleGateResult(false, true), "Other mouse lost native down.");
+    Require(gate.Hook(true), "Replayed native down also passed through physically.");
+    Require(gate.Raw("A", true, true) == default, "Repeated source down fired twice.");
+    Require(gate.Raw("a", false, false) == default && gate.Hook(false), "Circle release leaked or released another mouse.");
+    Require(gate.Raw("b", false, true) == new MiddleGateResult(false, false) && gate.Hook(false), "Native cycle changed with profile edits.");
+    Require(gate.Raw("a", true, false).NativePressed == true && gate.Hook(true), "Changed assignment did not restore native input.");
+    Require(gate.Raw("a", false, false).NativePressed == false && gate.Hook(false), "Restored native release lost.");
+}
+
+static void MiddleGateHolds()
+{
+    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    Require(gate.Raw("a", true, false).NativePressed == true && gate.Hook(true), "First native hold lost.");
+    Require(gate.Raw("b", true, false).NativePressed is null && gate.Hook(true), "Second owner duplicated native down.");
+    gate.Request(false);
+    Require(gate.Capturing, "Pause released ownership before physical release.");
+    Require(gate.Raw("a", false, false).NativePressed is null && gate.Hook(false), "First owner released second owner.");
+    Require(gate.Raw("b", false, false).NativePressed == false && gate.Hook(false), "Final owned up leaked.");
+    Require(!gate.Capturing, "Pause did not stop after balanced release.");
+    Require(gate.Raw("a", true, true) == default && !gate.Hook(true), "Paused Circle swallowed native input.");
+    Require(gate.Raw("a", false, false) == default && !gate.Hook(false), "Paused up was captured.");
+}
+
+static void MiddleGateActivation()
+{
+    var gate = new DriverlessMiddleGate();
+    gate.Raw("a", true, false); Require(!gate.Hook(true), "Inactive down blocked.");
+    gate.Request(true, true); Require(!gate.Capturing, "Armed halfway through a physical hold.");
+    Require(gate.Raw("a", false, true) == default && !gate.Hook(false), "Bypass cycle was taken over.");
+    gate.Request(true); Require(gate.Capturing, "Could not arm after release.");
+    Require(gate.Hook(true), "Hook-before-raw down was not blocked while capturing.");
+    Require(gate.Raw("a", true, false).NativePressed == true, "Late raw down was lost.");
+    gate.Request(false); Require(gate.Hook(false), "Hook-before-raw up leaked.");
+    Require(gate.Raw("a", false, false).NativePressed == false && !gate.Capturing, "Late raw release did not drain pause.");
+}
+
+static void MiddleGateCleanup()
+{
+    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    gate.Raw("a", true, false); gate.Hook(true);
+    gate.Raw("b", true, true); gate.Hook(true);
+    Require(!gate.RemoveSources(new HashSet<string>(["a", "b", "c"], StringComparer.OrdinalIgnoreCase)), "Unrelated arrival released native hold.");
+    Require(!gate.RemoveSources(new HashSet<string>(["a"], StringComparer.OrdinalIgnoreCase)), "Removing Circle owner released native mouse.");
+    Require(gate.RemoveSources(new HashSet<string>()), "Disconnect did not request native release.");
+    gate.Reset(); Require(!gate.Capturing && !gate.Hook(false), "Reset left suppression active.");
+    gate.Request(true); Require(gate.Raw("a", true, true).Circle && gate.Hook(true), "Reconnect retained old cycle.");
+}
 
 static void RawCircleHorizontalWheel()
 {

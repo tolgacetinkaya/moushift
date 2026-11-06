@@ -1,6 +1,6 @@
 # Moushift visual assets
 
-The approved mark combines two rounded mouse-button strokes into an M with a downward, star-shaped central cutout. The upper black bridge remains connected; the white star stops inside the upper V boundary. The application uses a theme-aware vector; the existing light/dark palettes are unchanged.
+The approved mark combines two rounded mouse-button strokes into an M with a downward, star-shaped central cutout. The upper black bridge remains connected; the white star stops inside the upper V boundary. The header follows the selected theme; shell assets use the canonical neon mint (`#45FFBA`).
 
 - `moushift-concept.png`: approved black/white reference, generated with the built-in image generation tool and selected on 2026-11-07.
 - `moushift-mark.svg`, `moushift-mark.png`, `Moushift.ico`: production geometry authored in `src/Clickloom.App/BrandMark.cs`. Reproduce with `Moushift.exe --export-brand-assets <output-directory>`. The ICO includes 32, 64 and 256 px images; the executable uses the copy in `Assets/Moushift.ico`.
@@ -20,4 +20,4 @@ Design a professional original logo symbol for Moushift, a desktop input customi
 
 Preserve the connected black rounded M silhouette and its unequal shoulder heights. Keep the central white star's two upper horns, small side points and downward tip. Extend the star upward toward the upper V boundary while retaining a continuous black band above it. The interior white star must not connect to the exterior background at the top. Preserve the lower waist and both rounded legs. Pure black and white, without effects or annotations.
 
-The production vector traces the approved reference rather than shipping its white background. Header color follows the active theme; tray and executable assets use the existing muted rose accent. Exported PNG/ICO backgrounds are transparent.
+The production vector traces the approved reference rather than shipping its white background. Window/taskbar, tray and executable icons share the mint color with the exported SVG/PNG/ICO. Exported PNG/ICO backgrounds are transparent; the logo itself is opaque for legibility at small sizes.

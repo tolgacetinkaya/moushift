@@ -10,7 +10,15 @@ Reviewed 2026-11-06. No driver, package, device configuration or vendor profile 
 
 Microsoft's [LowLevelMouseProc documentation](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelmouseproc) permits returning a nonzero value to stop delivery. Its [MSLLHOOKSTRUCT payload](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-msllhookstruct) has no device handle. Raw Input does provide a source, but is observation rather than cancellation of the ordinary desktop click. Combining independently delivered events by timing is not a verified guarantee when multiple mice act concurrently.
 
-Moushift therefore retains the original click in its current exact-source driverless mode. Global suppression would affect the same button on other mice. No global blocking, speculative source matching, or synthetic click replay was enabled as part of 0.14.6. Middle-button autoscroll is still a known limitation, not a completed fix.
+Version 0.14.6 retained the original click: global suppression alone would affect the same button on other mice. No global blocking, speculative source matching, or synthetic click replay was enabled in that version.
+
+## Middle-button routing (0.14.9)
+
+A controlled physical probe on this Windows installation confirmed that Raw Input source data remained available when the low-level hook suppressed the legacy middle click. The new gate blocks physical legacy middle-button edges while enabled, and routes the independent Raw Input stream by its real source. Assigned Circle cycles are consumed; other middle clicks are replayed with the existing injection marker. This deliberately replaces the middle-button input path for all mice while active, rather than attributing an anonymous hook packet to a guessed source.
+
+The action worker owns native replay DOWN/UP state, including reference-counted physical owners, pause, disconnect and shutdown cleanup. The raw/hook threads have a bounded 25 ms delivery handoff; missing delivery pauses interception and passes the native click. It does not cancel physical Raw Input in other applications. Synthetic-input rejection and Windows integrity-level restrictions remain applicable.
+
+Physical desktop test: Corsair Circle / MX Master native / Corsair Circle produced two exact-source Circle requests and only one legacy middle DOWN/UP pair at the separate target window, belonging to the MX Master test interval. No saved profiles or manufacturer settings were changed. Fixtures additionally cover concurrent mice, repeated edges, pause, assignment changes during a hold, neutral activation and removal/reset. This evidence is for ordinary desktop messages, not games or elevated applications.
 
 ## Horizontal wheel correction
 

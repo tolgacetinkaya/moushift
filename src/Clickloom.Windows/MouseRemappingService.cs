@@ -6,7 +6,7 @@ using Clickloom.Core;
 
 namespace Clickloom.Windows;
 
-/// <summary>Device-specific Circle observation with optional exclusive remapping. Starts disarmed.</summary>
+/// <summary>Device-specific Circle routing with middle-click replacement and optional exclusive remapping. Starts disarmed.</summary>
 public sealed partial class MouseRemappingService : IDisposable
 {
     private sealed record RoutingSnapshot(string Name, Dictionary<MouseControl, InputAction> Actions, Dictionary<int, InputAction> AuxiliaryKeys, bool OwnWindow, long Generation, nint ForegroundWindow)
@@ -75,6 +75,10 @@ public sealed partial class MouseRemappingService : IDisposable
     {
         bool rawChanged;
         lock (_settingsGate) rawChanged = _rawCircles.Update(connections);
+        var paths = connections.SelectMany(c => c.DevicePaths).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool releaseMiddle;
+        lock (_middleGateLock) releaseMiddle = _middleGate.RemoveSources(paths);
+        if (releaseMiddle) QueueMiddleReplay(false, 0);
         var next = DeviceRouteTable.Build(DeviceSources, connections);
         var previous = Volatile.Read(ref _deviceRoutes);
         if (previous.SameAs(next) && !rawChanged) return;
@@ -83,6 +87,7 @@ public sealed partial class MouseRemappingService : IDisposable
     }
     public void InvalidateDeviceRoutes()
     {
+        ResetMiddleGate();
         lock (_settingsGate) _rawCircles.Update([]);
         Volatile.Write(ref _deviceRoutes, DeviceRouteTable.Empty);
         if (_enabled) SetEnabled(false);
@@ -246,6 +251,7 @@ public sealed partial class MouseRemappingService : IDisposable
         if (!enabled) DismissRing();
         _dispatchState.AdvanceEnableEpoch();
         if (enabled) { _lastError = null; _enabled = true; }
+        RefreshMiddleGate();
         _wake.Set();
         RaiseStateChanged();
     }
@@ -414,6 +420,12 @@ public sealed partial class MouseRemappingService : IDisposable
             if (HasDeviceRouting) return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam);
             var message = (uint)wParam;
             var control = DecodeButton(message, data.MouseData, out var isUp);
+            if (control == MouseControl.MiddleButton && BlockNativeMiddle(!isUp))
+            {
+                if (!isUp) Observe(MouseControl.MiddleButton);
+                TraceCircle("block-native-middle", "raw source routing", control.ToString(), !isUp);
+                return 1;
+            }
             if (control is not null)
             {
                 if (isUp)
@@ -630,6 +642,7 @@ public sealed partial class MouseRemappingService : IDisposable
         DismissRing();
         _lastError = error;
         _enabled = false;
+        lock (_middleGateLock) _middleGate.Request(false);
         _dispatchState.AdvanceEnableEpoch();
         _wake.Set();
         RaiseStateChanged();
@@ -642,6 +655,7 @@ public sealed partial class MouseRemappingService : IDisposable
         {
             while (!_stopping)
             {
+                DrainMiddleReplays();
                 while (_captureUpdates.TryDequeue(out var captured))
                 {
                     Interlocked.Decrement(ref _observationCount);
@@ -681,7 +695,11 @@ public sealed partial class MouseRemappingService : IDisposable
                 }
             }
         }
-        finally { ReleaseHeldOutputs(); }
+        finally
+        {
+            ReleaseHeldOutputs();
+            try { ReleaseNativeMiddle(); } catch (Exception error) { _lastError = error.Message; }
+        }
     }
 
     private void Execute(Work work)
@@ -895,6 +913,7 @@ public sealed partial class MouseRemappingService : IDisposable
             var changed = _foreground != display || _activeProfile != name;
             _foreground = display;
             _activeProfile = name;
+            RefreshMiddleGate();
             if (changed) RaiseStateChanged();
         }
         catch (Exception exception) { _lastError = "Profile lookup failed: " + exception.Message; }
@@ -948,6 +967,7 @@ public sealed partial class MouseRemappingService : IDisposable
         _enabled = false;
         _dispatchState.AdvanceEnableEpoch();
         _foregroundTimer?.Dispose();
+        ResetMiddleGate();
         _stopping = true;
         try { _deviceBackend?.Dispose(); } catch (Exception error) { _lastError = error.Message; }
         _wake.Set();
@@ -955,7 +975,7 @@ public sealed partial class MouseRemappingService : IDisposable
         var hookStopped = _hookThread is null || _hookThread.Join(TimeSpan.FromSeconds(3));
         var workerStopped = _workerThread is null || _workerThread.Join(TimeSpan.FromSeconds(3));
         if (!hookStopped || !workerStopped) _lastError = "An input thread is still finishing cleanup.";
-        if (hookStopped && workerStopped) { _wake.Dispose(); _ready.Dispose(); }
+        if (hookStopped && workerStopped) { _wake.Dispose(); _ready.Dispose(); _rawMiddleArrived.Dispose(); }
         RaiseStateChanged();
     }
 }

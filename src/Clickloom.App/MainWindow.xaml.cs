@@ -588,7 +588,7 @@ public partial class MainWindow : Window
             }
             _service.SetEnabled(!_service.IsEnabled);
             StatusText.Text = _service.IsEnabled
-                ? _service.DriverlessCircleMode ? "Click Circle enabled for each mouse · Original button functions are retained. Other assignments stay inactive."
+                ? _service.DriverlessCircleMode ? "Click Circle enabled for each mouse · Assigned middle clicks are replaced. Other middle clicks are forwarded."
                     : "Assignments enabled · Your saved actions are active."
                 : "Assignments paused · Normal mouse behavior.";
             UpdateEngineState();
@@ -664,7 +664,7 @@ public partial class MainWindow : Window
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
         }
         if (DateTime.UtcNow - _lastInputShown > TimeSpan.FromSeconds(4))
-            InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? _service.DriverlessCircleMode ? "Driverless Circle · Original input retained" : "Per-mouse assignments enabled" : "Paused";
+            InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? _service.DriverlessCircleMode ? "Per-mouse Circle · Middle-click routing" : "Per-mouse assignments enabled" : "Paused";
     }
 
     private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
