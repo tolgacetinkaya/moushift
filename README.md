@@ -10,7 +10,7 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 
 - Side-by-side mouse gallery. Select any card to open that mouse alone in the center with its resizable settings inspector on the right. Navigation collapses to icons; profiles stay independent per mouse/application.
 - Battery badges on the gallery and selected mouse, when Windows exposes a percentage. Missing readings stay explicitly unavailable; no proprietary receiver protocol is used.
-- Click Circle in the main workspace: centered Circle with a searchable, draggable action library on the right, folders, shortcut parameters and undo/redo.
+- Click Circle in the main workspace: an animated overlay with a searchable, draggable action library, folders, shortcut parameters and undo/redo.
 - Application-specific Circles: select a mouse, open **Edit Circle → + App-specific Circle**, then search installed apps. New Circles copy that mouse's fallback; saved profiles stay independent. See [Application Circles](docs/APPLICATION_CIRCLES.md) for discovery and foreground-matching limits.
 - Generic HID descriptor discovery without a manufacturer/model allowlist or vendor commands.
 - Light (silver / green) and dark (charcoal / neon mint) themes, switchable from the title bar or Settings.
@@ -26,13 +26,13 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 | Button learning | Removed from the app; existing saved identities, positions and bindings are retained |
 | Firmware-only buttons | Cannot be learned when no accessible event is emitted |
 | Physical button location | Standard markers and previously saved positions; HID does not supply universal diagram coordinates |
-| Driverless Click Circle | Standard buttons and horizontal tilt, exact mouse/app profiles; assigned middle clicks replace native clicks |
+| Driverless mouse actions | Click Circle on standard buttons and horizontal tilt, plus Task View on standard buttons. Assigned middle clicks replace native clicks. |
 | Standard live remapping | Optional Interception backend for exclusive remapping; separate installation and verified source routing |
 | Arbitrary learned HID remapping | Not implemented; assignments are explicitly stored as inactive drafts |
 | Receiver identity | A receiver may represent multiple devices; its presence does not prove mouse power or uniquely identify a paired mouse |
 | Manufacturer-specific protocols | Not used for generic discovery/learning; no vendor output/feature reports are sent |
 
-The app starts paused. With connected Raw Input sources it offers **Enable Circle**, requiring no driver. Standard-button and horizontal-tilt Circle bindings are live; other assignments remain inactive. Assigned middle clicks replace native desktop clicks, while other mice's middle clicks are forwarded as tagged synthetic input. Other trigger buttons retain their original behavior. Custom HID and vertical-wheel triggers are not live in this mode. No driver is bundled or automatically installed. See [driverless limits](docs/DRIVERLESS_CIRCLE.md) for Raw Input applications and elevated-window restrictions.
+The app starts paused. With connected Raw Input sources it offers **Enable Circle**, which activates Click Circle and standard-button **Task View** assignments without a driver. Assigned middle clicks replace native desktop clicks. Other mice's middle clicks are forwarded as tagged synthetic input. Other trigger buttons retain their original behavior. See [driverless limits](docs/DRIVERLESS_CIRCLE.md) for supported inputs and elevated-window restrictions.
 
 ## Run
 

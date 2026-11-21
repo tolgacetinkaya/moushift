@@ -31,7 +31,8 @@ public sealed partial class RingEditorWindow : Window
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
     private readonly TextBlock _breadcrumb = new() { FontSize = 16, FontWeight = FontWeights.SemiBold };
     private readonly TextBlock _selection = new() { FontSize = 15, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 220 };
-    private readonly Button _undo = new() { Content = "↶", ToolTip = "Undo (Ctrl+Z)" }, _redo = new() { Content = "↷", ToolTip = "Redo (Ctrl+Y)" };
+    private readonly Button _undo = new() { Content = IconLabel(CircleVisuals.UndoIcon, "Undo"), ToolTip = "Undo last Circle edit (Ctrl+Z)" };
+    private readonly Button _redo = new() { Content = IconLabel(CircleVisuals.RedoIcon, "Redo"), ToolTip = "Redo last Circle edit (Ctrl+Y)" };
     private readonly Button _edit = new() { Content = "Edit" }, _remove = new() { Content = "Remove" }, _open = new() { Content = "Open folder" };
     private readonly Button _addShortcut = new() { Content = "+ Add shortcut", Margin = new(12, 0, 0, 0) };
     private readonly List<int> _folder = [];
@@ -51,6 +52,18 @@ public sealed partial class RingEditorWindow : Window
     private static Brush B(string key) => ThemeManager.Brush(key);
     private static TextBlock Text(string value, double size = 13, string color = "Ink") => new() { Text = value, FontSize = size, Foreground = B(color) };
 
+    private static StackPanel IconLabel(string icon, string label)
+    {
+        var mark = CircleVisuals.IconVisual(icon, 14, B("Ink"));
+        mark.Margin = new(0, 0, 7, 0);
+        mark.VerticalAlignment = VerticalAlignment.Center;
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { mark, new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center } }
+        };
+    }
+
     public RingEditorWindow(IEnumerable<RingSlot> slots, Clickloom.Windows.MouseRemappingService? captureService = null, string? profileName = null, int depth = 0)
         : this(SingleProfile(slots, profileName), Guid.Empty, captureService, profileName) { }
     private static AppSettings SingleProfile(IEnumerable<RingSlot> slots, string? name)
@@ -63,15 +76,19 @@ public sealed partial class RingEditorWindow : Window
         foreach (var profile in DeviceProfiles) _documents[profile.Id] = new(profile.RingSlots);
         Title = "Click Circle · " + (deviceName ?? Profile.DeviceName ?? "Mouse");
         Width = 1220; Height = 880; MinWidth = 1080; MinHeight = 720;
-        Background = B("Bg"); Foreground = B("Ink"); FontFamily = new("Segoe UI"); FontSize = 13;
+        Background = B("Bg"); Foreground = B("Ink"); FontFamily = CircleVisuals.TextFont; FontSize = 13;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = new Grid();
+        TextElement.SetFontFamily(root, CircleVisuals.TextFont);
         foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto }) root.RowDefinitions.Add(new() { Height = height });
         var header = new DockPanel { Margin = new(28, 22, 28, 20) };
         var history = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        System.Windows.Automation.AutomationProperties.SetName(_undo, "Undo Circle edit");
+        System.Windows.Automation.AutomationProperties.SetName(_redo, "Redo Circle edit");
         _undo.Click += (_, _) => History(false); _redo.Click += (_, _) => History(true); _undo.Margin = new(0, 0, 6, 0); history.Children.Add(_undo); history.Children.Add(_redo);
         DockPanel.SetDock(history, Dock.Right); header.Children.Add(history);
-        var backToButtons = new Button { Content = "‹ Back to buttons", Margin = new(0, 0, 18, 0), VerticalAlignment = VerticalAlignment.Center };
+        var backToButtons = new Button { Content = IconLabel(CircleVisuals.BackIcon, "Back to buttons"), Margin = new(0, 0, 18, 0), VerticalAlignment = VerticalAlignment.Center };
+        System.Windows.Automation.AutomationProperties.SetName(backToButtons, "Back to buttons");
         backToButtons.Click += (_, _) => { if (_hostedClose is not null) _hostedClose(); else Close(); };
         DockPanel.SetDock(backToButtons, Dock.Left); header.Children.Add(backToButtons);
         var heading = new StackPanel(); heading.Children.Add(Text("Click Circle", 27));
@@ -224,8 +241,11 @@ public sealed partial class RingEditorWindow : Window
     private void Node(RingSlot slot, int[] path, Point point, bool emphasized)
     {
         bool selected = _selected?.SequenceEqual(path) == true;
+        var glyph = CircleVisuals.IconVisual(CircleVisuals.Icon(slot), 21, B(CircleVisuals.Empty(slot) ? "Muted" : "Ink"));
+        glyph.HorizontalAlignment = HorizontalAlignment.Center;
+        glyph.VerticalAlignment = VerticalAlignment.Center;
         var node = new Border { Width = 52, Height = 52, CornerRadius = new(26), Background = B(selected ? "RingSelection" : "Bg"), BorderBrush = B(selected ? "Accent" : "Line"), BorderThickness = new(selected ? 1.7 : 1), Opacity = emphasized ? 1 : .45, Cursor = Cursors.Hand, AllowDrop = true,
-            ToolTip = slot.Name + (slot.Kind == RingSlotKind.Folder ? " · Click to open · Drop actions to add inside" : " · Double-click to edit"), Child = new TextBlock { Text = CircleVisuals.Icon(slot), FontFamily = new("Segoe Fluent Icons"), FontSize = 21, HorizontalAlignment = HorizontalAlignment.Center, Foreground = B(CircleVisuals.Empty(slot) ? "Muted" : "Ink") } };
+            ToolTip = slot.Name + (slot.Kind == RingSlotKind.Folder ? " · Click to open · Drop actions to add inside" : " · Double-click to edit"), Child = glyph };
         System.Windows.Automation.AutomationProperties.SetName(node, slot.Name); WireDrag(node, new PlacementDrag(_profileId, null, path)); WireDrop(node, path, false);
         _nodeViews[PathKey(path)] = node;
         node.Focusable = true;
@@ -337,7 +357,9 @@ public sealed partial class RingEditorWindow : Window
             var list = new StackPanel();
             foreach (var definition in category)
             {
-                var content = new DockPanel(); content.Children.Add(new TextBlock { Text = definition.Icon, FontFamily = new("Segoe Fluent Icons"), FontSize = 17, Margin = new(0, 0, 12, 0), Foreground = B("Accent") });
+                var icon = CircleVisuals.IconVisual(definition.Icon, 17, B("Accent"));
+                icon.Margin = new(0, 0, 12, 0);
+                var content = new DockPanel(); content.Children.Add(icon);
                 var title = Text(definition.Title, 12.5); title.TextTrimming = TextTrimming.CharacterEllipsis; content.Children.Add(title);
                 var row = new Border { Child = content, Background = B("Bg"), CornerRadius = new(8), Padding = new(12), Margin = new(0, 3, 0, 3), Cursor = Cursors.Hand, ToolTip = "Drag to a position, or double-click to add" };
                 WireDrag(row, new PlacementDrag(_profileId, definition, null)); row.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2) { if (_selected is not null) PlaceDefinition(definition, _selected, false); else if (_folder.Count > 0) PlaceDefinition(definition, _folder.Append(RingNavigation.Resolve(Slots, _folder)!.Children.Count).ToArray(), true); else SetStatus("Select a position first.", true); e.Handled = true; } }; list.Children.Add(row);

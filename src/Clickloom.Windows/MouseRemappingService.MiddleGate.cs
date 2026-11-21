@@ -60,17 +60,20 @@ public sealed partial class MouseRemappingService
         lock (_middleGateLock) return _middleGate.Hook(pressed);
     }
 
-    private MiddleGateResult RouteRawMiddle(string path, bool pressed, bool circle, nint target)
+    private MiddleGateResult RouteRawMiddle(string path, bool pressed, ActionKind? action, nint target)
     {
         MiddleGateResult result;
         lock (_middleGateLock)
         {
             if (pressed && _middleGate.Capturing) Interlocked.Increment(ref _rawMiddleDowns);
-            result = _middleGate.Raw(path, pressed, circle);
+            result = _middleGate.Raw(path, pressed, action is not null);
             _rawMiddleArrived.Set();
         }
         if (result.NativePressed is { } native) QueueMiddleReplay(native, target);
-        TraceCircle(result.Circle ? "middle-circle" : result.NativePressed is not null ? "middle-native-replay" : "middle-edge", "driverless middle gate", "MiddleButton", pressed);
+        string trace = result.Circle
+            ? action == ActionKind.TaskView ? "middle-task-view" : "middle-circle"
+            : result.NativePressed is not null ? "middle-native-replay" : "middle-edge";
+        TraceCircle(trace, "driverless middle gate", "MiddleButton", pressed);
         return result;
     }
 

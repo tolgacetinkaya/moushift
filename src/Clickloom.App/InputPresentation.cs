@@ -31,6 +31,7 @@ internal static class InputPresentation
         ActionKind.Text => "Type text",
         ActionKind.LaunchApplication => System.IO.Path.GetFileNameWithoutExtension(action.ApplicationPath),
         ActionKind.Ring => "Click Circle",
+        ActionKind.TaskView => "Task View",
         ActionKind.OpenResource => action.ApplicationPath,
         ActionKind.SelectCircleProfile => "Switch Circle profile",
         ActionKind.ToggleCircleAdapt => "Toggle Adapt to app",

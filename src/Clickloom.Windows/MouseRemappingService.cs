@@ -725,6 +725,9 @@ public sealed partial class MouseRemappingService : IDisposable
                 try { RingRequested?.Invoke(this, request); } catch { DismissRing(); throw; }
                 break;
             case ActionKind.Shortcut: SendShortcut(action); break;
+            case ActionKind.TaskView:
+                SendShortcut(new() { Kind = ActionKind.Shortcut, KeyCode = 0x09, Modifiers = KeyModifiers.Windows });
+                break;
             case ActionKind.Text: SendText(action.Text ?? ""); break;
             case ActionKind.OpenResource:
                 if (!SettingsValidator.IsOpenResource(action.ApplicationPath)) throw new InvalidOperationException("Unsupported resource address.");

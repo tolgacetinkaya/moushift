@@ -21,7 +21,7 @@ public partial class MainWindow
         bool driverless = _service?.HasDriverlessCircleSources == true;
         SetupStatusTitle.Text = ready ? "Your mice have separate input sources" : driverless ? "Click Circle is ready without a driver" : "Waiting for a mouse connection";
         SetupStatusDescription.Text = ready ? "Profiles are isolated by mouse. A mouse with no profile keeps its normal buttons."
-            : driverless ? "Each connected mouse opens its own Circle from a standard button assigned to Click Circle. Enable Circle, switch to another application and press that mouse's button. Original clicks still reach Windows. Other button actions and custom HID assignment drafts remain inactive without exclusive input support."
+            : driverless ? "Assign Click Circle or Task View to a standard mouse button, then choose Enable Circle. An assigned middle click runs the action in place of its normal click. Other standard buttons also keep their normal behavior."
             : capturing ? "Input support is running, but no mouse has a verified input source. Assignments stay off until a source is matched. Your profiles are saved."
             : "Connect a mouse and wait for Windows input observation. Driverless Click Circle needs no library or driver installation. Exclusive button remapping is a separate optional feature.";
         SetupBackendState.Text = ready ? "Exclusive input ready" : driverless ? "Driverless Circle ready" : capturing ? "No verified source" : "Waiting for mouse";

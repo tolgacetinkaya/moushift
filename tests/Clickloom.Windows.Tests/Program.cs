@@ -74,7 +74,7 @@ var tests = new (string Name, Action Run)[]
     ("middle gate cleans up disconnected sources and reset", MiddleGateCleanup),
     ("middle receiver handoff rejects stale delivery and fails open", MiddleGateDelivery),
     ("horizontal tilt resolves exact source, accumulates detents and coalesces repeats", RawCircleHorizontalWheel),
-    ("driverless Circle uses exact input source and executes only Circle bindings", RawCircleIsolation),
+    ("driverless mouse actions resolve only for the assigned device and app", RawCircleIsolation),
     ("driverless Circle resolves application and manual Circle profiles", RawCircleProfiles),
     ("driverless Circle retains press ownership across pause and connection refresh", RawCircleLifecycle),
     ("Raw Input mouse packet ABI and unthrottled button transitions", RawCirclePackets),
@@ -139,7 +139,7 @@ return failures == 0 ? 0 : 1;
 static void MiddleGateDelivery()
 {
     // Exercise the service's actual thread handoff without installing hooks or injecting input.
-    // Circle-only raw decisions do not enqueue native replay in this isolated service.
+    // A claimed raw press does not enqueue native replay in this isolated service.
     using var service = new MouseRemappingService();
     var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
     var type = typeof(MouseRemappingService);
@@ -147,9 +147,9 @@ static void MiddleGateDelivery()
     var raw = type.GetMethod("RouteRawMiddle", flags)!;
     var hook = type.GetMethod("BlockNativeMiddle", flags)!;
     gate.Request(true);
-    raw.Invoke(service, ["a", true, true, (nint)0]);
+    raw.Invoke(service, ["a", true, ActionKind.TaskView, (nint)0]);
     Require((bool)hook.Invoke(service, [true])!, "Delivered raw down did not allow suppression.");
-    raw.Invoke(service, ["a", false, false, (nint)0]);
+    raw.Invoke(service, ["a", false, null, (nint)0]);
     Require((bool)hook.Invoke(service, [false])!, "Delivered raw up was not suppressed.");
     var elapsed = System.Diagnostics.Stopwatch.StartNew();
     Require(!(bool)hook.Invoke(service, [true])!, "Stale delivery proof swallowed a different click.");
@@ -261,6 +261,8 @@ static void RawCircleIsolation()
     corsair.Bindings.Single(b => b.Input == MouseControl.XButton1).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Alt };
     var other = ProfileResolver.CreateDeviceDefault("other", "Other mouse");
     settings.Profiles.AddRange([corsair, other]);
+    var app = ApplicationCircleProfiles.GetOrCreate(settings, "corsair", @"C:\Apps\editor.exe", "Editor");
+    app.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.TaskView };
     var router = new RawCircleRouter();
     router.Update([new("corsair", "Corsair", "TEST", "USB", true, false, ["path:a"]), new("other", "Same VID/PID mouse", "TEST", "USB", true, false, ["path:b"])]);
     Require(router.Press(settings, "path:b", MouseControl.MiddleButton, true, true, null) is null, "An unassigned mouse inherited another mouse/shared Circle.");
@@ -270,6 +272,16 @@ static void RawCircleIsolation()
     Require(result?.DeviceKey == "corsair" && result.RingSlots[0].Name == "Corsair action", "Exact source did not resolve its Circle.");
     result!.RingSlots[0].Name = "Detached";
     Require(corsair.RingSlots[0].Name == "Corsair action", "Runtime modified stored Circle data.");
+
+    router.Press(settings, "path:a", MouseControl.MiddleButton, false, true, null);
+    var direct = router.Press(settings, "path:a", MouseControl.MiddleButton, true, true, app.ApplicationPath);
+    Require(direct?.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action.Kind == ActionKind.TaskView,
+        "The app-specific Task View assignment did not replace the default Circle trigger.");
+    Require(router.Press(settings, "path:a", MouseControl.MiddleButton, true, true, app.ApplicationPath) is null,
+        "A held button repeated Task View.");
+    router.Press(settings, "path:b", MouseControl.MiddleButton, false, true, null);
+    Require(router.Press(settings, "path:b", MouseControl.MiddleButton, true, true, app.ApplicationPath) is null,
+        "Task View crossed mouse identities.");
 }
 
 static void RawCircleProfiles()

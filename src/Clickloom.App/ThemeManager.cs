@@ -43,6 +43,9 @@ internal static class ThemeManager
             ["PrimaryFill"] = dark ? "#4045FFBA" : "#4000B87C", ["PrimaryInk"] = dark ? "#FFFFFF" : "#005C40",
             ["MetalEdge"] = dark ? "#42444E" : "#CCD0D9", ["Metal"] = dark ? "#222329" : "#E9EBF0",
             ["RingIdle"] = dark ? "#F027282E" : "#F5FFFFFF", ["RingSelection"] = dark ? "#4045FFBA" : "#4000B87C",
+            ["CircleGlassTop"] = dark ? "#F45C626E" : "#FFFFFFFF",
+            ["CircleGlassBottom"] = dark ? "#F018191E" : "#EDC9D1D9",
+            ["CircleGlassEdge"] = dark ? "#A86A7382" : "#C195A4B1",
             ["Danger"] = dark ? "#FFA1AA" : "#B0293F"
         };
         // An expression keeps these brushes unfrozen. WPF templates otherwise freeze a brush

@@ -75,6 +75,7 @@ public partial class MainWindow : Window
             new ActionChoice(ActionKind.Text, "Type text"),
             new ActionChoice(ActionKind.LaunchApplication, "Open application"),
             new ActionChoice(ActionKind.Ring, "Click Circle"),
+            new ActionChoice(ActionKind.TaskView, "Task View"),
             new ActionChoice(ActionKind.Disabled, "No action")
         };
         MouseOutputCombo.ItemsSource = MouseNames.Take(5).Select(p => new MouseChoice(p.Control, p.Name)).ToArray();
@@ -370,7 +371,8 @@ public partial class MainWindow : Window
         SavedActionText.Text = "Saved: " + (action.Kind == ActionKind.Passthrough ? "Default behavior" : DescribeAction(action));
         ApplyBindingButton.Content = row.LearnedId is not null ? "Save draft" : "Apply";
         if (row.LearnedId is not null) SavedActionText.Text = "Draft: " + DescribeAction(action) + " · not active";
-        else if (action.Kind == ActionKind.Ring && !(EditingProfile.DeviceKey is { } routeKey && _service?.CanRouteDevice(routeKey) == true))
+        else if (action.Kind == ActionKind.Ring && row.Mouse != MouseControl.MiddleButton
+            && !(EditingProfile.DeviceKey is { } routeKey && _service?.CanRouteDevice(routeKey) == true))
             SavedActionText.Text = "Saved: Click Circle + original input";
         if (row.Mouse is { } inheritedMouse && EditingProfile.ApplicationPath is not null && action.Kind == ActionKind.Ring
             && EditingProfile.Bindings.FirstOrDefault(b => b.Input == inheritedMouse)?.Action.Kind is null or ActionKind.Passthrough)
@@ -400,7 +402,9 @@ public partial class MainWindow : Window
         TextPanel.Visibility = choice.Kind == ActionKind.Text ? Visibility.Visible : Visibility.Collapsed;
         LaunchPanel.Visibility = choice.Kind == ActionKind.LaunchApplication ? Visibility.Visible : Visibility.Collapsed;
         RingPanel.Visibility = choice.Kind == ActionKind.Ring ? Visibility.Visible : Visibility.Collapsed;
-        ActionDescriptionBox.Visibility = choice.Kind == ActionKind.Ring ? Visibility.Visible : Visibility.Collapsed;
+        ActionDescriptionBox.Visibility = choice.Kind is ActionKind.Ring or ActionKind.TaskView ? Visibility.Visible : Visibility.Collapsed;
+        var input = BindingsList.SelectedItem as BindingRow;
+        bool exclusive = EditingProfile.DeviceKey is { } key && _service?.CanRouteDevice(key) == true;
         ActionDescription.Text = choice.Kind switch
         {
             ActionKind.Passthrough => "Keeps the button's normal behavior.",
@@ -409,8 +413,13 @@ public partial class MainWindow : Window
             ActionKind.MouseButton => "Supports holding and dragging.",
             ActionKind.Text => "Types text into the focused application.",
             ActionKind.LaunchApplication => "Opens your selected local application.",
-            ActionKind.Ring => EditingProfile.DeviceKey is { } key && _service?.CanRouteDevice(key) == true ? "Opens the Click Circle beside your pointer."
-                : "Circle opens alongside the original input. This mode does not replace the input. Per-mouse replacement requires exclusive input support; no driver is installed automatically.",
+            ActionKind.Ring when exclusive => "Opens the Click Circle beside your pointer.",
+            ActionKind.Ring when input?.Mouse == MouseControl.MiddleButton => "Opens Click Circle in place of the normal middle click.",
+            ActionKind.Ring => "Opens Click Circle while keeping the button’s normal behavior in driverless mode.",
+            ActionKind.TaskView when input?.LearnedId is not null => "Saves a Task View draft. Learned HID inputs cannot run assignments yet.",
+            ActionKind.TaskView when exclusive || input?.Mouse == MouseControl.MiddleButton => "Opens Windows Task View (Win + Tab) in place of the original input.",
+            ActionKind.TaskView when input?.Mouse is MouseControl.LeftButton or MouseControl.RightButton or MouseControl.XButton1 or MouseControl.XButton2 => "Opens Windows Task View (Win + Tab). In driverless mode this button also keeps its normal behavior.",
+            ActionKind.TaskView => "This input needs exclusive input support to open Task View.",
             _ => ""
         };
     }
@@ -573,7 +582,7 @@ public partial class MainWindow : Window
             }
             _service.SetEnabled(!_service.IsEnabled);
             StatusText.Text = _service.IsEnabled
-                ? _service.DriverlessCircleMode ? "Click Circle enabled for each mouse · Assigned middle clicks are replaced. Other middle clicks are forwarded."
+                ? _service.DriverlessCircleMode ? "Click Circle and Task View enabled for each mouse. Assigned middle clicks are replaced."
                     : "Assignments enabled · Your saved actions are active."
                 : "Assignments paused · Normal mouse behavior.";
             UpdateEngineState();

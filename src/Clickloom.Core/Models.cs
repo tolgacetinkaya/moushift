@@ -6,7 +6,7 @@ public enum MouseControl
     WheelUp, WheelDown, WheelLeft, WheelRight
 }
 
-public enum ActionKind { Passthrough, Disabled, Shortcut, MouseButton, Text, LaunchApplication, Ring, OpenResource, SelectCircleProfile, ToggleCircleAdapt }
+public enum ActionKind { Passthrough, Disabled, Shortcut, MouseButton, Text, LaunchApplication, Ring, OpenResource, SelectCircleProfile, ToggleCircleAdapt, TaskView }
 
 [Flags]
 public enum KeyModifiers { None = 0, Control = 1, Alt = 2, Shift = 4, Windows = 8 }
