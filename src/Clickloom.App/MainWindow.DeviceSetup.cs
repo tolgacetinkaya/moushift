@@ -74,6 +74,8 @@ public partial class MainWindow
         ActionCombo.SelectedValue = ActionKind.Ring; SaveBinding_Click(this, new RoutedEventArgs());
         BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.XButton1);
         ActionCombo.SelectedValue = ActionKind.Shortcut; _draftKeyCode = 9; _draftModifiers = KeyModifiers.Alt; UpdateShortcutDisplay(); SaveBinding_Click(this, new RoutedEventArgs());
+        BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.XButton2);
+        ActionCombo.SelectedValue = ActionKind.TaskView; SaveBinding_Click(this, new RoutedEventArgs());
         Guid first = EditingProfile.Id;
         ShowPage("devices"); secondCard.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         if (EditingProfile.Id == first || EditingProfile.Bindings.Any(x => x.Action.Kind != ActionKind.Passthrough)) throw new InvalidOperationException("Mouse B inherited mouse A assignments.");
@@ -81,7 +83,12 @@ public partial class MainWindow
         if (EditingProfile.Id != first || EditingProfile.Bindings.Single(x => x.Input == MouseControl.MiddleButton).Action.Kind != ActionKind.Ring) throw new InvalidOperationException("Mouse A did not retain its separate assignment.");
         var shortcut = EditingProfile.Bindings.Single(x => x.Input == MouseControl.XButton1).Action;
         if (shortcut.Kind != ActionKind.Shortcut || shortcut.KeyCode != 9 || shortcut.Modifiers != KeyModifiers.Alt) throw new InvalidOperationException("Device shortcut lost its modifiers or appeared on another mouse.");
-        if (_store.Load().Settings.Profiles.Single(p => p.DeviceKey == b.Key).Bindings.Any(x => x.Action.Kind != ActionKind.Passthrough)) throw new InvalidOperationException("Storage leaked assignments across mice.");
+        var savedProfiles = _store.Load().Settings.Profiles;
+        var taskView = savedProfiles.Single(p => p.Id == first).Bindings.Single(x => x.Input == MouseControl.XButton2).Action;
+        BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.XButton2);
+        if (!taskView.IsTaskViewAssignment || !Equals(ActionCombo.SelectedValue, ActionKind.TaskView))
+            throw new InvalidOperationException("Task View did not save as a shortcut and return as a named editor choice.");
+        if (savedProfiles.Single(p => p.DeviceKey == b.Key).Bindings.Any(x => x.Action.Kind != ActionKind.Passthrough)) throw new InvalidOperationException("Storage leaked assignments across mice.");
         if (DeviceHeading.Text != a.Name) throw new InvalidOperationException("A card opened another device's settings heading.");
         VerifyProfileScreens();
         var fixtures = new[] {

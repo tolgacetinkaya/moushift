@@ -36,7 +36,8 @@ internal sealed class RawCircleRouter
         if (control is not (MouseControl.LeftButton or MouseControl.RightButton or MouseControl.MiddleButton or MouseControl.XButton1 or MouseControl.XButton2)) return null;
         if (!_devices.TryGetValue(path, out string? key) || !_held.Add(identity) || !enabled) return null;
         var profile = ProfileResolver.ResolveDeviceInput(settings, foreground, key);
-        return profile?.Bindings.FirstOrDefault(b => b.Input == control)?.Action.Kind is ActionKind.Ring or ActionKind.TaskView ? profile : null;
+        var action = profile?.Bindings.FirstOrDefault(b => b.Input == control)?.Action;
+        return action is { Kind: ActionKind.Ring } or { IsTaskViewAssignment: true } ? profile : null;
     }
 
     // A tilt may repeat until released; high-resolution deltas may be smaller than one detent.

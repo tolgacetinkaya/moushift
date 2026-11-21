@@ -26,12 +26,11 @@ internal static class InputPresentation
     {
         ActionKind.Passthrough => "Default",
         ActionKind.Disabled => "No action",
-        ActionKind.Shortcut => Shortcut(action.KeyCode, action.Modifiers),
+        ActionKind.Shortcut => action.IsTaskViewAssignment ? "Task View" : Shortcut(action.KeyCode, action.Modifiers),
         ActionKind.MouseButton => Name(action.MouseOutput),
         ActionKind.Text => "Type text",
         ActionKind.LaunchApplication => System.IO.Path.GetFileNameWithoutExtension(action.ApplicationPath),
         ActionKind.Ring => "Click Circle",
-        ActionKind.TaskView => "Task View",
         ActionKind.OpenResource => action.ApplicationPath,
         ActionKind.SelectCircleProfile => "Switch Circle profile",
         ActionKind.ToggleCircleAdapt => "Toggle Adapt to app",

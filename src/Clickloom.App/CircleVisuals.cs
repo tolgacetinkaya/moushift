@@ -37,7 +37,7 @@ internal static class CircleVisuals
         if (!string.IsNullOrEmpty(slot.Icon)) return slot.Icon;
         if (slot.Kind == RingSlotKind.Folder) return "\uE8B7";
         if (slot.Kind == RingSlotKind.Adjustment) return "\uE767";
-        if (slot.Action.Kind == ActionKind.TaskView || slot.Action is { Kind: ActionKind.Shortcut, KeyCode: 0x09, Modifiers: KeyModifiers.Windows }) return "\uE7C4";
+        if (slot.Action is { Kind: ActionKind.Shortcut, KeyCode: 0x09, Modifiers: KeyModifiers.Windows }) return "\uE7C4";
         return slot.Action.Kind switch
         {
             ActionKind.Text => "\uE8D2", ActionKind.LaunchApplication => "\uE8A7", ActionKind.OpenResource => "\uE8B7",

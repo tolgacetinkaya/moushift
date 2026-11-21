@@ -147,7 +147,7 @@ static void MiddleGateDelivery()
     var raw = type.GetMethod("RouteRawMiddle", flags)!;
     var hook = type.GetMethod("BlockNativeMiddle", flags)!;
     gate.Request(true);
-    raw.Invoke(service, ["a", true, ActionKind.TaskView, (nint)0]);
+    raw.Invoke(service, ["a", true, InputAction.CreateTaskViewAssignment(), (nint)0]);
     Require((bool)hook.Invoke(service, [true])!, "Delivered raw down did not allow suppression.");
     raw.Invoke(service, ["a", false, null, (nint)0]);
     Require((bool)hook.Invoke(service, [false])!, "Delivered raw up was not suppressed.");
@@ -259,15 +259,17 @@ static void RawCircleIsolation()
     corsair.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
     corsair.RingSlots[0].Name = "Corsair action";
     corsair.Bindings.Single(b => b.Input == MouseControl.XButton1).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Alt };
+    corsair.Bindings.Single(b => b.Input == MouseControl.XButton2).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Windows };
     var other = ProfileResolver.CreateDeviceDefault("other", "Other mouse");
     settings.Profiles.AddRange([corsair, other]);
     var app = ApplicationCircleProfiles.GetOrCreate(settings, "corsair", @"C:\Apps\editor.exe", "Editor");
-    app.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.TaskView };
+    app.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = InputAction.CreateTaskViewAssignment();
     var router = new RawCircleRouter();
     router.Update([new("corsair", "Corsair", "TEST", "USB", true, false, ["path:a"]), new("other", "Same VID/PID mouse", "TEST", "USB", true, false, ["path:b"])]);
     Require(router.Press(settings, "path:b", MouseControl.MiddleButton, true, true, null) is null, "An unassigned mouse inherited another mouse/shared Circle.");
     Require(router.Press(settings, "unknown", MouseControl.MiddleButton, true, true, null) is null, "Unknown source used a last-active mouse.");
     Require(router.Press(settings, "path:a", MouseControl.XButton1, true, true, null) is null, "Driverless input executed a shortcut assignment.");
+    Require(router.Press(settings, "path:a", MouseControl.XButton2, true, true, null) is null, "A plain Win+Tab shortcut opted into driverless Task View.");
     var result = router.Press(settings, "PATH:A", MouseControl.MiddleButton, true, true, null);
     Require(result?.DeviceKey == "corsair" && result.RingSlots[0].Name == "Corsair action", "Exact source did not resolve its Circle.");
     result!.RingSlots[0].Name = "Detached";
@@ -275,7 +277,7 @@ static void RawCircleIsolation()
 
     router.Press(settings, "path:a", MouseControl.MiddleButton, false, true, null);
     var direct = router.Press(settings, "path:a", MouseControl.MiddleButton, true, true, app.ApplicationPath);
-    Require(direct?.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action.Kind == ActionKind.TaskView,
+    Require(direct?.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action.IsTaskViewAssignment == true,
         "The app-specific Task View assignment did not replace the default Circle trigger.");
     Require(router.Press(settings, "path:a", MouseControl.MiddleButton, true, true, app.ApplicationPath) is null,
         "A held button repeated Task View.");

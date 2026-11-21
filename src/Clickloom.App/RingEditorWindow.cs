@@ -206,7 +206,6 @@ public sealed partial class RingEditorWindow : Window
         ClearDropVisual(); _nodeViews.Clear(); _canvas.Children.Clear();
         _canvas.Width = _folder.Count == 0 ? 440 : 680; _canvas.Height = _folder.Count == 0 ? 400 : 570;
         var center = _folder.Count == 0 ? new Point(220, 180) : new Point(340, 268);
-        Put(new System.Windows.Shapes.Ellipse { Width = 208, Height = 208, Stroke = B("Line"), StrokeThickness = .7, Opacity = .5, IsHitTestVisible = false }, center, 208, 208);
         for (int i = 0; i < Slots.Count; i++) Node(Slots[i], [i], CircleVisuals.Root(center, i, 104), _folder.Count == 0 || _folder[0] == i);
         if (_folder.Count > 0)
         {

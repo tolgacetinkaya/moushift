@@ -121,7 +121,7 @@ public static class SettingsValidator
     private static void ValidateAction(InputAction? action, List<string> errors)
     {
         if (action is null) { errors.Add("An input action cannot be null."); return; }
-        if (!Enum.IsDefined(action.Kind)) errors.Add("Unsupported action type.");
+        if (!Enum.IsDefined(action.Kind) || action.Kind == ActionKind.TaskView) errors.Add("Unsupported action type.");
         const KeyModifiers supported = KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Shift | KeyModifiers.Windows;
         if ((action.Modifiers & ~supported) != 0) errors.Add("Unsupported keyboard modifier.");
         if (action.Kind == ActionKind.Shortcut && (action.KeyCode is < 8 or > 254

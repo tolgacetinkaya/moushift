@@ -382,7 +382,7 @@ public partial class MainWindow : Window
             ? "Assign an extra mouse button that sends a keyboard key."
             : InputPresentation.Position(row.Mouse!.Value);
         _draftKeyCode = action.KeyCode; _draftModifiers = action.Modifiers;
-        ActionCombo.SelectedValue = action.Kind;
+        ActionCombo.SelectedValue = action.IsTaskViewAssignment ? ActionKind.TaskView : action.Kind;
         MouseOutputCombo.SelectedValue = action.MouseOutput;
         TextActionBox.Text = action.Text;
         ApplicationPathBox.Text = action.ApplicationPath;
@@ -446,7 +446,7 @@ public partial class MainWindow : Window
     private void SaveBinding_Click(object sender, RoutedEventArgs e)
     {
         if (BindingsList.SelectedItem is not BindingRow row || ActionCombo.SelectedItem is not ActionChoice choice) return;
-        var action = new InputAction
+        var action = choice.Kind == ActionKind.TaskView ? InputAction.CreateTaskViewAssignment() : new InputAction
         {
             Kind = choice.Kind, KeyCode = choice.Kind == ActionKind.Shortcut ? _draftKeyCode : 0,
             Modifiers = choice.Kind == ActionKind.Shortcut ? _draftModifiers : KeyModifiers.None,

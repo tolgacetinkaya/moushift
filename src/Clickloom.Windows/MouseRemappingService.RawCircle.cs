@@ -71,7 +71,7 @@ public sealed partial class MouseRemappingService
         var action = profile?.Bindings.FirstOrDefault(binding => binding.Input == input.Control)?.Action;
         if (input.Control == MouseControl.MiddleButton)
         {
-            var result = RouteRawMiddle(input.DevicePath, input.Pressed, action?.Kind, NativeMethods.GetForegroundWindow());
+            var result = RouteRawMiddle(input.DevicePath, input.Pressed, action, NativeMethods.GetForegroundWindow());
             if (!result.Circle || IsRingOpen) return;
         }
         if (profile is null || action is null) return;

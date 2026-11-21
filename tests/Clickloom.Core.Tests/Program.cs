@@ -23,6 +23,7 @@ var tests = new (string Name, Action Run)[]
     ("clones isolate mutable bindings", Clone),
     ("validator rejects malformed actions and identities", Validation),
     ("settings round trip and last-good backup", Persistence),
+    ("Task View keeps the shortcut format and recovers first-preview settings", TaskViewPersistence),
     ("malformed settings survive load and explicit repair", Corruption),
     ("unknown schema never silently becomes current", UnknownSchema),
     ("invalid save does not touch existing bytes", InvalidSave),
@@ -133,6 +134,35 @@ static void Persistence() => WithStore((store, directory) =>
     Require(File.ReadAllBytes(store.FilePath + ".bak").SequenceEqual(firstBytes), "Backup is not the last-known-good file.");
     Require(store.Load().Settings.Profiles[0].Name == "İkinci", "Replacement did not publish.");
     Require(!Directory.EnumerateFiles(directory, "*.tmp").Any(), "Temporary file leaked.");
+});
+
+static void TaskViewPersistence() => WithStore((store, _) =>
+{
+    var settings = AppSettings.CreateDefault();
+    var mouse = ProfileResolver.CreateDeviceDefault("test-mouse", "Test mouse");
+    mouse.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = InputAction.CreateTaskViewAssignment();
+    settings.Profiles.Add(mouse);
+    store.Save(settings.DeepClone());
+    var document = JsonNode.Parse(File.ReadAllText(store.FilePath))!;
+    var saved = document["Profiles"]![1]!["Bindings"]!.AsArray()
+        .Single(b => b!["Input"]!.GetValue<string>() == "MiddleButton")!["Action"]!;
+    Require(saved["Kind"]!.GetValue<string>() == "Shortcut" && saved["KeyCode"]!.GetValue<int>() == 9
+        && saved["Modifiers"]!.GetValue<string>() == "Windows", "Task View must save as the existing Win+Tab shortcut.");
+    Require(saved["RunTaskView"]!.GetValue<bool>(), "Cloning dropped the explicit Task View assignment.");
+
+    saved["Kind"] = "TaskView";
+    saved["KeyCode"] = 0;
+    saved["Modifiers"] = "None";
+    saved.AsObject().Remove("RunTaskView");
+    string previewJson = document.ToJsonString();
+    File.WriteAllText(store.FilePath, previewJson);
+    var loaded = store.Load();
+    Require(loaded.Warning is null && loaded.Settings.Profiles.Count == 2
+        && loaded.Settings.Profiles[1].Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action.IsTaskViewAssignment,
+        "Loading first-preview Task View dropped the assignment or an unrelated profile.");
+    Require(File.ReadAllText(store.FilePath) == previewJson, "Loading a first-preview profile rewrote it.");
+    store.Save(loaded.Settings);
+    Require(!File.ReadAllText(store.FilePath).Contains("\"TaskView\""), "Saving rewrote the legacy enum value.");
 });
 
 static void Corruption() => WithStore((store, directory) =>
