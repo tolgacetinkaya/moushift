@@ -68,17 +68,20 @@ public sealed partial class MouseRemappingService
                 : _rawCircles.Press(_settings, input.DevicePath, input.Control, input.Pressed,
                     ready && (input.Control == MouseControl.MiddleButton || !IsRingOpen), snapshot.ApplicationPath);
         }
+        var action = profile?.Bindings.FirstOrDefault(binding => binding.Input == input.Control)?.Action;
         if (input.Control == MouseControl.MiddleButton)
         {
-            var result = RouteRawMiddle(input.DevicePath, input.Pressed, profile is not null, NativeMethods.GetForegroundWindow());
+            var result = RouteRawMiddle(input.DevicePath, input.Pressed, action, NativeMethods.GetForegroundWindow());
             if (!result.Circle || IsRingOpen) return;
         }
-        if (profile is null) return;
-        if (!Enqueue(new(new InputAction { Kind = ActionKind.Ring }, false, false, Interlocked.Increment(ref _token),
-            stamp.EnableEpoch, stamp.RoutingGeneration, snapshot.ForegroundWindow, profile, true)))
-        { DisarmFromHook("Click Circle queue is full; observation paused."); return; }
-        Volatile.Write(ref _inputStatus, (profile.DeviceName ?? "Mouse") + " · " + input.Control
-            + (input.Control == MouseControl.MiddleButton ? " · Click Circle; native middle click replaced." : " · driverless Click Circle; original input retained."));
+        if (profile is null || action is null) return;
+        bool opensCircle = action.Kind == ActionKind.Ring;
+        if (!Enqueue(new(action, false, false, Interlocked.Increment(ref _token), stamp.EnableEpoch,
+            stamp.RoutingGeneration, snapshot.ForegroundWindow, opensCircle ? profile : null, opensCircle)))
+        { DisarmFromHook("Mouse action queue is full; observation paused."); return; }
+        string actionName = opensCircle ? "Click Circle" : "Task View";
+        string inputBehavior = input.Control == MouseControl.MiddleButton ? "native middle click replaced" : "original input retained";
+        Volatile.Write(ref _inputStatus, $"{profile.DeviceName ?? "Mouse"} · {input.Control} · {actionName}; {inputBehavior}.");
     }
 }
 

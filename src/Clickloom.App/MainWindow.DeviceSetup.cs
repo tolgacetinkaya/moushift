@@ -21,7 +21,7 @@ public partial class MainWindow
         bool driverless = _service?.HasDriverlessCircleSources == true;
         SetupStatusTitle.Text = ready ? "Your mice have separate input sources" : driverless ? "Click Circle is ready without a driver" : "Waiting for a mouse connection";
         SetupStatusDescription.Text = ready ? "Profiles are isolated by mouse. A mouse with no profile keeps its normal buttons."
-            : driverless ? "Each connected mouse opens its own Circle from a standard button assigned to Click Circle. Enable Circle, switch to another application and press that mouse's button. Original clicks still reach Windows. Other button actions and custom HID assignment drafts remain inactive without exclusive input support."
+            : driverless ? "Assign Click Circle or Task View to a standard mouse button, then choose Enable Circle. An assigned middle click runs the action in place of its normal click. Other standard buttons also keep their normal behavior."
             : capturing ? "Input support is running, but no mouse has a verified input source. Assignments stay off until a source is matched. Your profiles are saved."
             : "Connect a mouse and wait for Windows input observation. Driverless Click Circle needs no library or driver installation. Exclusive button remapping is a separate optional feature.";
         SetupBackendState.Text = ready ? "Exclusive input ready" : driverless ? "Driverless Circle ready" : capturing ? "No verified source" : "Waiting for mouse";
@@ -71,9 +71,18 @@ public partial class MainWindow
             throw new InvalidOperationException("Three device cards are not side by side.");
         firstCard.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.MiddleButton);
+        var editButton = (System.Windows.Controls.Button)BindingsList.ItemTemplate.LoadContent();
+        editButton.Tag = BindingsList.SelectedItem;
+        editButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        if (EditorPane.Visibility != Visibility.Visible) throw new InvalidOperationException("Edit did not open the selected button.");
+        CloseEditor();
+        editButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        if (EditorPane.Visibility != Visibility.Visible) throw new InvalidOperationException("Edit could not reopen the same selected button.");
         ActionCombo.SelectedValue = ActionKind.Ring; SaveBinding_Click(this, new RoutedEventArgs());
         BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.XButton1);
         ActionCombo.SelectedValue = ActionKind.Shortcut; _draftKeyCode = 9; _draftModifiers = KeyModifiers.Alt; UpdateShortcutDisplay(); SaveBinding_Click(this, new RoutedEventArgs());
+        BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.XButton2);
+        ActionCombo.SelectedValue = ActionKind.TaskView; SaveBinding_Click(this, new RoutedEventArgs());
         Guid first = EditingProfile.Id;
         ShowPage("devices"); secondCard.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         if (EditingProfile.Id == first || EditingProfile.Bindings.Any(x => x.Action.Kind != ActionKind.Passthrough)) throw new InvalidOperationException("Mouse B inherited mouse A assignments.");
@@ -81,8 +90,13 @@ public partial class MainWindow
         if (EditingProfile.Id != first || EditingProfile.Bindings.Single(x => x.Input == MouseControl.MiddleButton).Action.Kind != ActionKind.Ring) throw new InvalidOperationException("Mouse A did not retain its separate assignment.");
         var shortcut = EditingProfile.Bindings.Single(x => x.Input == MouseControl.XButton1).Action;
         if (shortcut.Kind != ActionKind.Shortcut || shortcut.KeyCode != 9 || shortcut.Modifiers != KeyModifiers.Alt) throw new InvalidOperationException("Device shortcut lost its modifiers or appeared on another mouse.");
-        if (_store.Load().Settings.Profiles.Single(p => p.DeviceKey == b.Key).Bindings.Any(x => x.Action.Kind != ActionKind.Passthrough)) throw new InvalidOperationException("Storage leaked assignments across mice.");
-        if (DeviceHeading.Text != a.Name) throw new InvalidOperationException("A card opened another device's settings heading.");
+        var savedProfiles = _store.Load().Settings.Profiles;
+        var taskView = savedProfiles.Single(p => p.Id == first).Bindings.Single(x => x.Input == MouseControl.XButton2).Action;
+        BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.XButton2);
+        if (!taskView.IsTaskViewAssignment || !Equals(ActionCombo.SelectedValue, ActionKind.TaskView))
+            throw new InvalidOperationException("Task View did not save as a shortcut and return as a named editor choice.");
+        if (savedProfiles.Single(p => p.DeviceKey == b.Key).Bindings.Any(x => x.Action.Kind != ActionKind.Passthrough)) throw new InvalidOperationException("Storage leaked assignments across mice.");
+        if (DetailHeading.Text != a.Name) throw new InvalidOperationException("A card opened another device's settings heading.");
         VerifyProfileScreens();
         var fixtures = new[] {
             new Clickloom.Windows.MouseConnection(a.Key, a.Name, "TEST", "USB", true, false, ["fixture:a"]),
@@ -101,6 +115,13 @@ public partial class MainWindow
         ApplyConnectionInventory(fixtures);
         if (_deviceCards.Count != 3 || !_deviceCards.Single(d => d.Key == a.Key).Detail.Contains("unconfirmed") || _deviceCards.Any(d => d.Activity == "Input just now"))
             throw new InvalidOperationException("A connected receiver was hidden or reconnect reused old activity.");
-        CloseEditor(); Console.WriteLine("PASS isolated WPF gallery: three cards, scoped profiles, disconnect/reconnect, receiver status and preserved assignments; no windows or input.");
+        PrepareDesignFixture();
+        BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.MiddleButton);
+        ActionCombo.SelectedValue = ActionKind.TaskView; SaveBinding_Click(this, new RoutedEventArgs());
+        _settings = _store.Load().Settings;
+        PrepareDesignFixture();
+        if (!EditingProfile.Bindings.Single(x => x.Input == MouseControl.MiddleButton).Action.IsTaskViewAssignment)
+            throw new InvalidOperationException("Preview initialization replaced an edited assignment after reloading settings.");
+        CloseEditor(); Console.WriteLine("PASS isolated WPF gallery: three cards, re-opening the same button, scoped profiles, disconnect/reconnect, receiver status and preserved assignments; no windows or input.");
     }
 }

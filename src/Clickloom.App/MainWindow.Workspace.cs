@@ -10,6 +10,7 @@ public partial class MainWindow
     private WorkspacePreferences _workspacePreferences = new();
     private RingEditorWindow? _circleEditor;
     private bool _circleReturnToDetail;
+    private bool _returnToProfiles;
 
     private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
     {
@@ -48,7 +49,8 @@ public partial class MainWindow
 
     private void BackToGallery_Click(object sender, RoutedEventArgs e)
     {
-        ShowPage("devices");
+        if (_returnToProfiles) ProfilesNav_Click(sender, e);
+        else ShowPage("devices");
     }
 
     private void OpenCircleWorkspace()

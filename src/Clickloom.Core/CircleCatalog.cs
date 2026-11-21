@@ -39,7 +39,7 @@ public static class CircleCatalog
         Key("keyboard.find", "Keyboard", "Find", "\uE721", 0x46, KeyModifiers.Control);
         Key("keyboard.emoji", "Keyboard", "Emoji picker", "\uE899", 0xBE, KeyModifiers.Windows);
         Key("navigation.switch", "Navigation", "Switch windows", "\uE8C4", 0x09, KeyModifiers.Alt);
-        Key("navigation.tasks", "Navigation", "Task View", "\uE7F4", 0x09, KeyModifiers.Windows);
+        Key("navigation.tasks", "Navigation", "Task View", "\uE7C4", 0x09, KeyModifiers.Windows);
         Key("navigation.desktop", "Navigation", "Show desktop", "\uE977", 0x44, KeyModifiers.Windows);
         Key("navigation.newDesktop", "Navigation", "Add desktop", "\uE710", 0x44, KeyModifiers.Windows | KeyModifiers.Control);
         Key("navigation.nextDesktop", "Navigation", "Next desktop", "\uE76C", 0x27, KeyModifiers.Windows | KeyModifiers.Control);

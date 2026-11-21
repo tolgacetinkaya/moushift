@@ -26,7 +26,14 @@ public partial class MainWindow
         UpdateLayout(); PlaceMarkers();
         if (_circleEditor is not null && args.Contains("--folder")) _circleEditor.ShowFolderPreview();
         if (_circleEditor is not null && args.Contains("--drag-preview")) { UpdateLayout(); _circleEditor.ShowDragPresentationPreview(); }
-        if (args.Contains("--three-devices")) BackToGallery_Click(this, new RoutedEventArgs());
+        if (args.Contains("--three-devices"))
+        {
+            BackToGallery_Click(this, new RoutedEventArgs());
+            EnterInteractivePreview();
+            StatusText.Text = "Sample devices · edits save in the preview only";
+        }
+        if (args.Contains("--show-profiles")) ProfilesNav_Click(this, new RoutedEventArgs());
+        if (args.Contains("--show-settings")) AppearanceNav_Click(this, new RoutedEventArgs());
     }
 
     internal void PrepareDesignButtonEditor()
@@ -46,14 +53,18 @@ public partial class MainWindow
         if (_selectedDevice is not null || DeviceInspector.Visibility != Visibility.Collapsed || InspectorSplitter.Visibility != Visibility.Collapsed
             || InspectorColumn.ActualWidth != 0 || InspectorSplitterColumn.ActualWidth != 0 || DevicesPage.Visibility != Visibility.Visible)
             throw new InvalidOperationException("The gallery reserved a settings panel without a selected mouse.");
+        if (DashboardConnectionCount.Text != _deviceCards.Count.ToString() || !ReferenceEquals(DashboardBattery.DataContext, b))
+            throw new InvalidOperationException("The dashboard summary did not reflect the available connections and battery reading.");
         DeviceCard_Click(new Button { Tag = b }, new RoutedEventArgs());
         UpdateLayout();
-        if (DeviceHeading.Text != b.Name || DetailHeading.Text != b.Name || EditingProfile.DeviceKey != b.DeviceKey || DevicesPage.Visibility != Visibility.Collapsed
+        if (DetailHeading.Text != b.Name || EditingProfile.DeviceKey != b.DeviceKey || DevicesPage.Visibility != Visibility.Collapsed
             || DeviceDetailPage.Visibility != Visibility.Visible || MappingPage.Visibility != Visibility.Visible || DeviceInspector.Visibility != Visibility.Visible)
             throw new InvalidOperationException("A card did not open only its mouse in the center with its settings on the right.");
         if (!ReferenceEquals(DetailBatteryInfo.Content, b) || b.BatteryLabel != "60%" || a.BatteryVisibility != Visibility.Collapsed || b.BatteryVisibility != Visibility.Visible)
             throw new InvalidOperationException("Battery information did not follow the selected device or invented a missing percentage.");
         b.BatteryPercent = null;
+        UpdateDashboardOverview();
+        if (DashboardBattery.Visibility != Visibility.Collapsed) throw new InvalidOperationException("Dashboard showed a battery gauge without a reading.");
         if (b.BatteryVisibility != Visibility.Collapsed || b.BatteryLabel.Length != 0) throw new InvalidOperationException("Missing battery left a badge or placeholder.");
         b.BatteryPercent = 0;
         if (b.BatteryVisibility != Visibility.Visible || b.BatteryLabel != "0%") throw new InvalidOperationException("An empty battery was hidden as unknown.");
@@ -61,10 +72,14 @@ public partial class MainWindow
         LeftViewButton.IsChecked = true; UpdateLayout(); PlaceMarkers();
         if (HeroMouse.View != MouseDrawingView.Left || RightCallout.Visibility != Visibility.Collapsed || BackCallout.Visibility != Visibility.Visible)
             throw new InvalidOperationException("Side elevation did not show the accessible buttons.");
+        if (HeroMouse.Anchor(MouseControl.XButton2).X >= HeroMouse.Anchor(MouseControl.XButton1).X)
+            throw new InvalidOperationException("The side view placed the forward marker behind the back marker.");
         var sideAnchor = HeroMouse.NormalizedAnchor(.26, .61);
         if (!HeroMouse.TryNormalize(sideAnchor, out double sx, out double sy) || Math.Abs(sx - .26) > .0001 || Math.Abs(sy - .61) > .0001)
             throw new InvalidOperationException("Side-view position transforms changed the saved coordinate.");
         TopViewButton.IsChecked = true;
+        if (HeroMouse.Anchor(MouseControl.XButton2).Y >= HeroMouse.Anchor(MouseControl.XButton1).Y)
+            throw new InvalidOperationException("The top view placed the forward marker behind the back marker.");
         DeviceCard_Click(new Button { Tag = a }, new RoutedEventArgs());
         // Both fixture profiles now exist. Selecting / browsing / theming must be read-only.
         byte[] before = File.ReadAllBytes(_store.FilePath);
@@ -77,8 +92,8 @@ public partial class MainWindow
         MappingsNav_Click(this, new RoutedEventArgs());
         var preferences = _workspacePreferences;
         ToggleSidebar_Click(this, new RoutedEventArgs()); UpdateLayout();
-        if (SidebarColumn.Width.Value != 68 || (Visibility)Resources["SidebarLabelVisibility"] != Visibility.Collapsed)
-            throw new InvalidOperationException("The sidebar did not collapse to an icon rail.");
+        if ((Visibility)Resources["SidebarLabelVisibility"] != Visibility.Collapsed)
+            throw new InvalidOperationException("Compact navigation did not hide the labels.");
         ToggleSidebar_Click(this, new RoutedEventArgs());
         RememberInspectorWidth(490); UpdateLayout();
         ApplyWorkspaceSizing();

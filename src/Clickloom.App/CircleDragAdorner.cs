@@ -30,7 +30,7 @@ internal sealed class CircleDragAdorner : Adorner, IDisposable
         _host = host; _layer = AdornerLayer.GetAdornerLayer(host) ?? throw new InvalidOperationException("The Circle drag layer is unavailable.");
         IsHitTestVisible = false; Focusable = false;
         var content = new DockPanel();
-        var symbol = new Border { Width = 40, Height = 40, CornerRadius = new(12), Background = ThemeManager.Brush("RingSelection"), Margin = new(0, 0, 12, 0),
+        var symbol = new FacetedBorder { Width = 40, Height = 40, Background = ThemeManager.Brush("RingSelection"), Margin = new(0, 0, 12, 0),
             Child = new TextBlock { Text = icon, FontFamily = new("Segoe Fluent Icons"), FontSize = 21, Foreground = ThemeManager.Brush("Accent"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
         content.Children.Add(symbol);
         _badge = new TextBlock { Width = 22, FontSize = 19, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -39,7 +39,7 @@ internal sealed class CircleDragAdorner : Adorner, IDisposable
         labels.Children.Add(new TextBlock { Text = title, Foreground = ThemeManager.Brush("Ink"), FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
         _operation = new TextBlock { FontSize = 10.5, Margin = new(0, 5, 0, 0), Foreground = ThemeManager.Brush("Muted"), TextTrimming = TextTrimming.CharacterEllipsis };
         labels.Children.Add(_operation); content.Children.Add(labels);
-        _card = new Border { Width = CardWidth, Height = CardHeight, CornerRadius = new(14), Padding = new(12), BorderThickness = new(1),
+        _card = new FacetedBorder { Width = CardWidth, Height = CardHeight, Padding = new(15, 12, 15, 12), BorderThickness = new(1),
             Background = ThemeManager.Brush("PanelLight"), BorderBrush = ThemeManager.Brush("Line"), Child = content,
             RenderTransformOrigin = new(.1, .5), RenderTransform = _scale,
             Effect = new DropShadowEffect { BlurRadius = 20, ShadowDepth = 5, Opacity = .3, Color = Colors.Black } };

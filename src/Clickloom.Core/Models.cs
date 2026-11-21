@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Clickloom.Core;
 
 public enum MouseControl
@@ -6,12 +8,13 @@ public enum MouseControl
     WheelUp, WheelDown, WheelLeft, WheelRight
 }
 
-public enum ActionKind { Passthrough, Disabled, Shortcut, MouseButton, Text, LaunchApplication, Ring, OpenResource, SelectCircleProfile, ToggleCircleAdapt }
+// TaskView is retained for the editor choice and to read the first preview's settings.
+public enum ActionKind { Passthrough, Disabled, Shortcut, MouseButton, Text, LaunchApplication, Ring, OpenResource, SelectCircleProfile, ToggleCircleAdapt, TaskView }
 
 [Flags]
 public enum KeyModifiers { None = 0, Control = 1, Alt = 2, Shift = 4, Windows = 8 }
 
-public sealed class InputAction
+public sealed class InputAction : IJsonOnDeserialized
 {
     public ActionKind Kind { get; set; } = ActionKind.Passthrough;
     public int KeyCode { get; set; }
@@ -21,10 +24,34 @@ public sealed class InputAction
     public string Arguments { get; set; } = "";
     public MouseControl MouseOutput { get; set; } = MouseControl.LeftButton;
 
+    // Older releases can still load and execute the shortcut. The flag opts into
+    // driverless routing only when the user explicitly picks the Task View action.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RunTaskView { get; set; }
+
+    [JsonIgnore]
+    public bool IsTaskViewAssignment => RunTaskView && Kind == ActionKind.Shortcut
+        && KeyCode == 0x09 && Modifiers == KeyModifiers.Windows;
+
+    public static InputAction CreateTaskViewAssignment() => new()
+    {
+        Kind = ActionKind.Shortcut, KeyCode = 0x09, Modifiers = KeyModifiers.Windows, RunTaskView = true
+    };
+
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        // Recover settings written by the first Task View preview.
+        if (Kind != ActionKind.TaskView) return;
+        Kind = ActionKind.Shortcut;
+        KeyCode = 0x09;
+        Modifiers = KeyModifiers.Windows;
+        RunTaskView = true;
+    }
+
     public InputAction DeepClone() => new()
     {
         Kind = Kind, KeyCode = KeyCode, Modifiers = Modifiers, Text = Text,
-        ApplicationPath = ApplicationPath, Arguments = Arguments, MouseOutput = MouseOutput
+        ApplicationPath = ApplicationPath, Arguments = Arguments, MouseOutput = MouseOutput, RunTaskView = RunTaskView
     };
 }
 

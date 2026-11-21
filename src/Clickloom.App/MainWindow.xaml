@@ -15,27 +15,17 @@
         <TextBlock Text="{Binding BatteryLabel}" FontSize="13" Foreground="{DynamicResource Ink}"/>
       </StackPanel>
     </DataTemplate>
-    <DataTemplate x:Key="ConnectionRow">
-      <Button Click="DeviceCard_Click" IsEnabled="{Binding CanEdit}" Tag="{Binding}" HorizontalContentAlignment="Stretch" Padding="18,16" Margin="0,0,0,8" Background="{DynamicResource Panel}" AutomationProperties.Name="{Binding Name}">
-        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/><ColumnDefinition Width="180"/><ColumnDefinition Width="24"/></Grid.ColumnDefinitions>
-          <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE962;" FontSize="23" Foreground="{DynamicResource Muted}"/>
-          <StackPanel Grid.Column="1" Margin="8,0,20,0"><TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" FontSize="12" Margin="0,5,0,0"/></StackPanel>
-          <StackPanel Grid.Column="2" HorizontalAlignment="Right"><TextBlock Text="{Binding Routing}" FontSize="12"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Muted}"/><Style.Triggers><DataTrigger Binding="{Binding Activity}" Value="Separate input ready"><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock><TextBlock Text="{Binding Activity}" FontSize="11" Foreground="{DynamicResource Muted}" Margin="0,6,0,0"/></StackPanel>
-          <TextBlock Grid.Column="3" FontFamily="Segoe Fluent Icons" Text="&#xE76C;" FontSize="12" HorizontalAlignment="Right" Foreground="{DynamicResource Muted}"/>
-        </Grid>
-      </Button>
-    </DataTemplate>
-
     <Style x:Key="DeviceTile" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Width" Value="{DynamicResource DeviceTileWidth}"/><Setter Property="Height" Value="{DynamicResource DeviceTileHeight}"/>
-      <Setter Property="Padding" Value="12,14"/><Setter Property="Margin" Value="0,0,10,0"/>
+      <Setter Property="Padding" Value="24,16"/><Setter Property="Margin" Value="0,0,10,0"/>
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="VerticalContentAlignment" Value="Stretch"/>
-      <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Background" Value="{DynamicResource DashboardCard}"/><Setter Property="BorderBrush" Value="{DynamicResource DashboardEdge}"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-        <Border x:Name="Tile" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border>
+        <local:FacetedBorder x:Name="Tile" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="24" Padding="{TemplateBinding Padding}"><ContentPresenter/></local:FacetedBorder>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Tile" Property="BorderThickness" Value="1"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource DashboardHover}"/><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
           <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Tile" Property="Opacity" Value="0.5"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
@@ -43,21 +33,27 @@
     <DataTemplate x:Key="DeviceTileTemplate">
       <Button x:Name="DeviceTileButton" Click="DeviceCard_Click" Tag="{Binding}" IsEnabled="{Binding CanEdit}" Style="{StaticResource DeviceTile}" AutomationProperties.Name="{Binding Name}" AutomationProperties.HelpText="{Binding Detail}">
         <Grid>
-          <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="64"/><RowDefinition Height="3"/><RowDefinition Height="44"/><RowDefinition Height="*"/><RowDefinition Height="44"/></Grid.RowDefinitions>
-          <Border x:Name="SelectedCheck" Width="23" Height="23" Background="{DynamicResource Accent}" CornerRadius="12" Opacity="0" HorizontalAlignment="Center">
-            <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons" Foreground="{DynamicResource Panel}" FontSize="11" HorizontalAlignment="Center"/>
+          <Grid.RowDefinitions><RowDefinition Height="46"/><RowDefinition Height="36"/><RowDefinition Height="*"/><RowDefinition Height="54"/></Grid.RowDefinitions>
+          <TextBlock x:Name="DeviceTileName" Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" LineHeight="21" LineStackingStrategy="BlockLineHeight" MaxHeight="44" ToolTip="{Binding Name}"/>
+          <local:FacetedBorder Grid.Row="1" Background="{DynamicResource DashboardPill}" CornerRadius="12" Padding="8,4" HorizontalAlignment="Left" VerticalAlignment="Top" ToolTip="{Binding Detail}">
+            <StackPanel Orientation="Horizontal"><Ellipse Width="5" Height="5" Fill="{DynamicResource Accent}" Margin="0,0,6,0"/><TextBlock Text="{Binding ConnectionLabel}" Foreground="{DynamicResource Ink}" FontSize="12"/></StackPanel>
+          </local:FacetedBorder>
+          <Border Grid.Row="2" CornerRadius="16" Padding="8,0">
+            <Border.Background><RadialGradientBrush Center="0.50,0.55" GradientOrigin="0.50,0.55" RadiusX="0.57" RadiusY="0.53"><GradientStop Color="{Binding Color, Source={StaticResource DashboardGlow}}" Offset="0"/><GradientStop Color="Transparent" Offset="1"/></RadialGradientBrush></Border.Background>
+            <local:MouseIllustration x:Name="DeviceTileArtwork" Accent="{DynamicResource Accent}"/>
           </Border>
-          <TextBlock x:Name="DeviceTileName" Grid.Row="1" Text="{Binding Name}" FontSize="22" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" LineHeight="26" LineStackingStrategy="BlockLineHeight" MaxHeight="60" ToolTip="{Binding Name}"/>
-          <Border x:Name="SelectedLine" Grid.Row="2" Background="{DynamicResource Accent}" Opacity="0" Margin="6,0"/>
-          <StackPanel Grid.Row="3" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Activity}" Foreground="{DynamicResource Muted}" FontSize="14" TextAlignment="Center"/>
-            <TextBlock Text="{Binding ConnectionLabel}" Foreground="{DynamicResource Muted}" FontSize="10" TextAlignment="Center" Margin="0,4,0,0"/>
-          </StackPanel>
-          <Border Grid.Row="4" Margin="0,22,0,0"><local:MouseIllustration x:Name="DeviceTileArtwork" Accent="{DynamicResource Accent}"/></Border>
-          <ContentControl Grid.Row="5" Content="{Binding}" Visibility="{Binding BatteryVisibility}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <Grid Grid.Row="3" Margin="0,7,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="{Binding Activity}" Foreground="{DynamicResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Activity}"/>
+              <ContentControl Content="{Binding}" Visibility="{Binding BatteryVisibility}" ContentTemplate="{StaticResource BatteryBadge}" Margin="0,4,0,0"/>
+            </StackPanel>
+            <Border Grid.Column="1" Width="30" Height="30" CornerRadius="15" Background="{DynamicResource DashboardPill}" HorizontalAlignment="Right" VerticalAlignment="Center">
+              <TextBlock Text="&#xE72A;" FontFamily="Segoe Fluent Icons" FontSize="13" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Grid>
         </Grid>
       </Button>
-      <DataTemplate.Triggers><DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter TargetName="SelectedCheck" Property="Opacity" Value="1"/><Setter TargetName="SelectedLine" Property="Opacity" Value="1"/></DataTrigger></DataTemplate.Triggers>
     </DataTemplate>
     <Style x:Key="ContextAction" TargetType="Button" BasedOn="{StaticResource Quiet}"><Setter Property="FontSize" Value="14"/><Setter Property="Padding" Value="12,10"/><Setter Property="MinHeight" Value="40"/></Style>
     <Style x:Key="Marker" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -80,119 +76,133 @@
         </Setter.Value>
       </Setter>
     </Style>
-    <Style x:Key="Navigation" TargetType="Button" BasedOn="{StaticResource Quiet}">
-      <Setter Property="FontSize" Value="16" />
-      <Setter Property="Padding" Value="12,12" />
-      <Setter Property="Margin" Value="0,2" />
-      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Style x:Key="Navigation" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Padding" Value="12,7" />
+      <Setter Property="Margin" Value="0,0,4,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
     </Style>
   </Window.Resources>
-  <Border x:Name="ThemeFrame" Background="{DynamicResource Bg}" BorderBrush="{DynamicResource MetalEdge}" BorderThickness="1" CornerRadius="10" TextElement.Foreground="{DynamicResource Ink}" TextElement.FontFamily="Segoe UI" TextElement.FontSize="14">
+  <Border x:Name="ThemeFrame" Background="{DynamicResource Bg}" BorderBrush="{DynamicResource MetalEdge}" BorderThickness="1" CornerRadius="10" TextElement.Foreground="{DynamicResource Ink}" TextElement.FontFamily="Segoe UI Variable Text, Segoe UI" TextElement.FontSize="14">
     <Grid>
-      <Grid.RowDefinitions>
-        <RowDefinition Height="64" />
-        <RowDefinition Height="*" />
-        <RowDefinition Height="32" />
-      </Grid.RowDefinitions>
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition x:Name="SidebarColumn" Width="180" />
-        <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
-      <Border x:Name="ThemeTitleBar" Grid.ColumnSpan="2" Background="{DynamicResource Metal}" BorderBrush="{DynamicResource MetalEdge}" BorderThickness="0,0,0,1">
-        <Grid>
-          <StackPanel Orientation="Horizontal" Margin="18,0"><local:BrandMark Width="36" Height="36" Foreground="{DynamicResource Accent}"/><TextBlock Text="Moushift" FontSize="23" FontWeight="SemiBold" Margin="12,0,0,0" Visibility="{DynamicResource SidebarLabelVisibility}"/></StackPanel>
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True">
-            <TextBlock x:Name="EngineBadge" Text="Paused" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,0,16,0"/>
-            <Button x:Name="EnableButton" Content="Enable Circle" Click="Enable_Click" MinWidth="104" Margin="0,0,25,0" BorderBrush="{DynamicResource Ink}"/>
-            <Button Click="ToggleTheme_Click" Style="{StaticResource Quiet}" Width="34" Padding="0" HorizontalContentAlignment="Center" ToolTip="Switch light or dark appearance" AutomationProperties.Name="Toggle light and dark theme"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE793;" FontSize="16"/></Button>
-            <Button Content="" FontFamily="Segoe Fluent Icons" Style="{StaticResource CaptionButton}" Click="Minimize_Click" AutomationProperties.Name="Minimize" />
-            <Button Content="" FontFamily="Segoe Fluent Icons" Style="{StaticResource CaptionButton}" Click="Maximize_Click" AutomationProperties.Name="Maximize or restore" />
-            <Button Content="" FontFamily="Segoe Fluent Icons" Style="{StaticResource CaptionButton}" Click="CloseWindow_Click" AutomationProperties.Name="Close window" />
+      <Grid.RowDefinitions><RowDefinition Height="66"/><RowDefinition Height="*"/><RowDefinition Height="34"/></Grid.RowDefinitions>
+      <Border Grid.RowSpan="3" CornerRadius="12" IsHitTestVisible="False">
+        <Border.Background><ImageBrush ImageSource="{DynamicResource WorkspaceArtwork}" Stretch="UniformToFill" AlignmentY="Bottom"/></Border.Background>
+      </Border>
+      <Border Grid.RowSpan="3" CornerRadius="12" IsHitTestVisible="False" Background="{DynamicResource WorkspaceScrim}"/>
+      <local:FacetedBorder x:Name="ThemeTitleBar" Margin="16,10,16,0" Background="{DynamicResource WorkspaceChrome}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="25">
+        <Grid Margin="11,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <StackPanel Orientation="Horizontal" Margin="6,0,18,0" VerticalAlignment="Center">
+            <local:BrandMark Width="31" Height="31" Foreground="{DynamicResource Accent}"/>
+            <TextBlock Text="Moushift" FontSize="21" FontWeight="SemiBold" Margin="9,0,0,0" VerticalAlignment="Center"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True" KeyboardNavigation.TabNavigation="Continue">
+            <Button x:Name="DevicesNav" ToolTip="Devices" AutomationProperties.Name="Devices" Style="{StaticResource Navigation}" Click="DevicesNav_Click">
+              <StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE962;" Margin="{DynamicResource SidebarIconMargin}"/><TextBlock Visibility="{DynamicResource SidebarLabelVisibility}" Text="Devices"/></StackPanel>
+            </Button>
+            <Button x:Name="ProfilesNav" ToolTip="Profiles" AutomationProperties.Name="Profiles" Style="{StaticResource Navigation}" Click="ProfilesNav_Click">
+              <StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8F1;" Margin="{DynamicResource SidebarIconMargin}"/><TextBlock Visibility="{DynamicResource SidebarLabelVisibility}" Text="Profiles"/></StackPanel>
+            </Button>
+            <Button x:Name="AppearanceNav" ToolTip="Settings" AutomationProperties.Name="Settings" Style="{StaticResource Navigation}" Click="AppearanceNav_Click">
+              <StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE713;" Margin="{DynamicResource SidebarIconMargin}"/><TextBlock Visibility="{DynamicResource SidebarLabelVisibility}" Text="Settings"/></StackPanel>
+            </Button>
+            <Button x:Name="AboutNav" ToolTip="Help" AutomationProperties.Name="Help" Style="{StaticResource Navigation}" Click="AboutNav_Click">
+              <StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE897;" Margin="{DynamicResource SidebarIconMargin}"/><TextBlock Visibility="{DynamicResource SidebarLabelVisibility}" Text="Help"/></StackPanel>
+            </Button>
+            <Button x:Name="SidebarToggle" Click="ToggleSidebar_Click" Style="{StaticResource Navigation}" Width="32" Padding="0" HorizontalContentAlignment="Center" ToolTip="Use compact navigation" AutomationProperties.Name="Toggle compact navigation"><TextBlock x:Name="SidebarToggleIcon" FontFamily="Segoe Fluent Icons" Text="&#xE76B;"/></Button>
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <TextBlock x:Name="EngineBadge" Text="Paused" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,0,12,0"/>
+            <Button x:Name="EnableButton" Content="Enable Circle" Click="Enable_Click" MinWidth="100" Margin="0,0,8,0" Style="{StaticResource Primary}"/>
+            <Button Click="ToggleTheme_Click" Style="{StaticResource Navigation}" Width="34" Padding="0" HorizontalContentAlignment="Center" ToolTip="Switch light or dark appearance" AutomationProperties.Name="Toggle light and dark theme"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE793;" FontSize="16"/></Button>
+            <Button Content="&#xE921;" FontFamily="Segoe Fluent Icons" Style="{StaticResource CaptionButton}" Click="Minimize_Click" AutomationProperties.Name="Minimize"/>
+            <Button Content="&#xE922;" FontFamily="Segoe Fluent Icons" Style="{StaticResource CaptionButton}" Click="Maximize_Click" AutomationProperties.Name="Maximize or restore"/>
+            <Button Content="&#xE8BB;" FontFamily="Segoe Fluent Icons" Style="{StaticResource CaptionButton}" Click="CloseWindow_Click" AutomationProperties.Name="Close window"/>
           </StackPanel>
         </Grid>
-      </Border>
-      <Border Grid.Row="1" Grid.RowSpan="2" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" Padding="8,18,8,22">
-        <DockPanel>
-          <Button DockPanel.Dock="Top" x:Name="SidebarToggle" Click="ToggleSidebar_Click" Style="{StaticResource Quiet}" HorizontalAlignment="Right" Width="40" Padding="0" Margin="0,0,0,16" ToolTip="Collapse navigation" AutomationProperties.Name="Toggle navigation"><TextBlock x:Name="SidebarToggleIcon" FontFamily="Segoe Fluent Icons" Text="&#xE76B;"/></Button>
-          <StackPanel DockPanel.Dock="Bottom">
-
-
-            <Button x:Name="AppearanceNav" ToolTip="Settings" AutomationProperties.Name="Settings" Style="{StaticResource Navigation}" Click="AppearanceNav_Click"><StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE713;" Margin="{DynamicResource SidebarIconMargin}"/><TextBlock Visibility="{DynamicResource SidebarLabelVisibility}" Text="Settings"/></StackPanel></Button>
-            <Button x:Name="AboutNav" ToolTip="Help" AutomationProperties.Name="Help" Style="{StaticResource Navigation}" Click="AboutNav_Click" Margin="0,3,0,0">
-              <StackPanel Orientation="Horizontal">
-                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE897;" Margin="{DynamicResource SidebarIconMargin}" />
-                <TextBlock Visibility="{DynamicResource SidebarLabelVisibility}" Text="Help" FontSize="14" />
-              </StackPanel>
-            </Button>
-          </StackPanel>
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel>
-
-            <Button x:Name="DevicesNav" ToolTip="Devices" AutomationProperties.Name="Devices" Style="{StaticResource Navigation}" Click="DevicesNav_Click">
-              <StackPanel Orientation="Horizontal">
-                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE962;" FontSize="19" Margin="{DynamicResource SidebarIconMargin}" />
-                <TextBlock Visibility="{DynamicResource SidebarLabelVisibility}" Text="Devices" />
-              </StackPanel>
-            </Button>
-
-            <Button x:Name="ProfilesNav" ToolTip="Profiles" AutomationProperties.Name="Profiles" Style="{StaticResource Navigation}" Click="ProfilesNav_Click">
-              <StackPanel Orientation="Horizontal">
-                <TextBlock FontFamily="Segoe Fluent Icons" Text="" Margin="{DynamicResource SidebarIconMargin}" />
-                <TextBlock Visibility="{DynamicResource SidebarLabelVisibility}" Text="Profiles" />
-              </StackPanel>
-            </Button>
-
-
-
-
-
-
-          </StackPanel>
-          </ScrollViewer>
-        </DockPanel>
-      </Border>
-      <Grid Grid.Row="1" Grid.Column="1">
+      </local:FacetedBorder>
+      <Grid Grid.Row="1" Margin="0,7,0,0">
         <TextBlock x:Name="PageTitle" Visibility="Collapsed"/>
         <Grid>
           <Grid x:Name="DevicesWorkspace">
             <Grid.ColumnDefinitions><ColumnDefinition MinWidth="380" Width="*"/><ColumnDefinition x:Name="InspectorSplitterColumn" Width="0"/><ColumnDefinition x:Name="InspectorColumn" MinWidth="0" MaxWidth="640" Width="0"/></Grid.ColumnDefinitions>
-            <Grid x:Name="DevicesPage" Margin="32,30,28,12">
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-              <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel><TextBlock Text="Your mice" FontSize="34" FontWeight="SemiBold"/><TextBlock Text="Select a mouse to see its settings." Style="{StaticResource Caption}" Margin="0,8,0,0"/></StackPanel>
-                <Button Grid.Column="1" Click="RefreshDevices_Click" Style="{StaticResource Quiet}" Padding="8" VerticalAlignment="Top" ToolTip="Refresh connections" AutomationProperties.Name="Refresh devices"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72C;" FontSize="16"/></Button>
-              </Grid>
-              <ScrollViewer Grid.Row="1" x:Name="DeviceGalleryScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" VerticalAlignment="Center" Margin="0,16,0,10">
-                <ItemsControl x:Name="DeviceCardsList" ItemTemplate="{StaticResource DeviceTileTemplate}" KeyboardNavigation.TabNavigation="Continue">
-                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                </ItemsControl>
-              </ScrollViewer>
-              <Border Grid.Row="1" x:Name="EmptyDevicesBox" Background="Transparent" Padding="24" VerticalAlignment="Center">
-                <StackPanel><TextBlock x:Name="EmptyDevicesText" Text="No mouse connections" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="Connect a mouse or receiver to get started." Style="{StaticResource Caption}" Margin="0,10,0,0"/></StackPanel>
-              </Border>
-              <Expander Grid.Row="2" Header="Receiver connections" Margin="0,8,0,6" MaxHeight="230">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="4,12,8,8">
-                  <TextBlock x:Name="DevicesSubtitle" Style="{StaticResource Caption}" FontSize="12"/>
-                  <TextBlock Text="A connected receiver does not confirm that its mouse is switched on. Move the mouse to identify its connection." Style="{StaticResource Caption}" FontSize="12" Margin="0,8,0,12"/>
-                  <ItemsControl x:Name="ReceiverConnectionsList"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,7"><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" FontSize="11" Margin="0,4,0,0"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-                  <Expander x:Name="AdditionalDevicesExpander" Header="Other pointing interfaces" Margin="0,8,0,0"><ItemsControl x:Name="AdditionalDevicesList" ItemTemplate="{StaticResource ConnectionRow}"/></Expander>
-                  <TextBlock x:Name="PresenceDetails" Style="{StaticResource Caption}" FontSize="11" Margin="0,12,0,0"/>
-                  <ItemsControl x:Name="DriverProfilesList" Visibility="Collapsed"/>
-                </StackPanel></ScrollViewer>
-              </Expander>
-            </Grid>
-            <Grid x:Name="DeviceDetailPage" Visibility="Collapsed" Margin="28,24,24,16">
+            <Grid x:Name="DevicesPage" Margin="24,22,24,16">
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-              <StackPanel><Button Content="‹  All mice" Click="BackToGallery_Click" HorizontalAlignment="Left" Margin="0,0,0,18"/><TextBlock x:Name="DetailHeading" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap"/><ContentControl x:Name="DetailBatteryInfo" Visibility="{Binding Content.BatteryVisibility, RelativeSource={RelativeSource Self}}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Left" Margin="0,10,0,8"/><TextBlock Text="Choose a button on the drawing to edit its assignment." Style="{StaticResource Caption}" Margin="0,8,0,8"/></StackPanel>
-              <Grid Grid.Row="1">                <Grid x:Name="DiagramPane">
+              <Grid Margin="2,0,2,18">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel><TextBlock Text="Your mice" FontSize="36" FontWeight="SemiBold"/><TextBlock Text="Manage buttons and Click Circle for each mouse." Style="{StaticResource Caption}" Margin="0,5,0,0"/></StackPanel>
+                <Button Grid.Column="1" Click="RefreshDevices_Click" Padding="12,6" VerticalAlignment="Center" Background="{DynamicResource DashboardCard}" BorderBrush="{DynamicResource DashboardEdge}" ToolTip="Refresh connections" AutomationProperties.Name="Refresh devices"><StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72C;" Foreground="{DynamicResource Accent}" Margin="0,0,8,0"/><TextBlock Text="Refresh"/></StackPanel></Button>
+              </Grid>
+              <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="186"/><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel>
+                    <local:FacetedBorder Background="{DynamicResource DashboardCard}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="22" Padding="22,16" Margin="0,0,0,12">
+                      <StackPanel>
+                        <TextBlock Text="Windows connections" FontSize="12" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="DashboardConnectionCount" Text="0" FontSize="48" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="0,1,0,0"/>
+                        <TextBlock x:Name="DashboardReceiverCount" FontSize="11" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,1,0,0"/>
+                      </StackPanel>
+                    </local:FacetedBorder>
+                    <local:FacetedBorder x:Name="DashboardBattery" Background="{DynamicResource DashboardRaised}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="22" Padding="22,14" Margin="0,0,0,12" Visibility="Collapsed" ToolTip="Lowest available battery level reported by Windows">
+                      <StackPanel>
+                        <TextBlock Text="Lowest reported battery" FontSize="12" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
+                        <Grid Height="91" Width="91" Margin="0,10,0,9">
+                          <local:DashboardBatteryDial Percent="{Binding BatteryPercent}" Accent="{DynamicResource Accent}" Track="{DynamicResource Line}"/>
+                          <TextBlock Text="{Binding BatteryLabel}" FontSize="25" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="{Binding Name}" FontSize="12" TextAlignment="Center" TextWrapping="Wrap"/>
+                      </StackPanel>
+                    </local:FacetedBorder>
+                    <local:FacetedBorder Background="{DynamicResource DashboardCard}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="22" Padding="18,7">
+                      <Expander Header="Connection details">
+                        <StackPanel Margin="4,8,4,8">
+                          <TextBlock x:Name="DevicesSubtitle" Style="{StaticResource Caption}" FontSize="11"/>
+                          <TextBlock Text="A receiver can stay connected while its mouse is off." Style="{StaticResource Caption}" FontSize="11" Margin="0,8,0,6"/>
+                          <ItemsControl x:Name="ReceiverConnectionsList"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,5"><TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" FontSize="10" Margin="0,4,0,0"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                          <Expander x:Name="AdditionalDevicesExpander" Header="Other interfaces" Margin="0,6,0,0"><ItemsControl x:Name="AdditionalDevicesList"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="4,4,0,4"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" FontSize="11"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" FontSize="10" Margin="0,3,0,0"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Expander>
+                          <TextBlock x:Name="PresenceDetails" Style="{StaticResource Caption}" FontSize="10" Margin="0,8,0,0"/>
+                          <ItemsControl x:Name="DriverProfilesList" Visibility="Collapsed"/>
+                        </StackPanel>
+                      </Expander>
+                    </local:FacetedBorder>
+                  </StackPanel>
+                </ScrollViewer>
+                <local:FacetedBorder Grid.Column="2" Background="{DynamicResource DashboardStage}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="28" Padding="16">
+                  <Grid>
+                    <ScrollViewer x:Name="DeviceGalleryScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" VerticalAlignment="Center" Padding="8,8,0,8">
+                      <ItemsControl x:Name="DeviceCardsList" ItemTemplate="{StaticResource DeviceTileTemplate}" KeyboardNavigation.TabNavigation="Continue" HorizontalAlignment="Center">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      </ItemsControl>
+                    </ScrollViewer>
+                    <local:FacetedBorder x:Name="EmptyDevicesBox" Background="{DynamicResource DashboardCard}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="22" Padding="26" HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <StackPanel><TextBlock x:Name="EmptyDevicesText" Text="No mouse connections" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="Connect a mouse or receiver to get started." Style="{StaticResource Caption}" Margin="0,10,0,0"/></StackPanel>
+                    </local:FacetedBorder>
+                  </Grid>
+                </local:FacetedBorder>
+              </Grid>
+            </Grid>
+            <Grid x:Name="DeviceDetailPage" Visibility="Collapsed" Margin="20,13,14,14">
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <StackPanel Margin="4,0,4,17">
+                <Button x:Name="DetailBackButton" Content="‹  All mice" Click="BackToGallery_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                <TextBlock x:Name="DetailHeading" FontSize="35" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <ContentControl x:Name="DetailBatteryInfo" Visibility="{Binding Content.BatteryVisibility, RelativeSource={RelativeSource Self}}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Left" Margin="0,9,0,0"/>
+              </StackPanel>
+              <local:FacetedBorder Grid.Row="1" Background="{DynamicResource DashboardStage}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="28" Padding="24,14">
+                <Grid x:Name="DiagramPane">
                   <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                   </Grid.RowDefinitions>
-                  <Grid x:Name="DiagramStage" MaxWidth="440" VerticalAlignment="Center" Height="300">
+                  <Grid Grid.Row="1" x:Name="DiagramStage" MaxWidth="440" MaxHeight="550">
+                    <Border CornerRadius="26" IsHitTestVisible="False">
+                      <Border.Background><RadialGradientBrush Center="0.5,0.55" GradientOrigin="0.5,0.55" RadiusX="0.55" RadiusY="0.5"><GradientStop Color="{Binding Color, Source={StaticResource DashboardGlow}}" Offset="0"/><GradientStop Color="Transparent" Offset="1"/></RadialGradientBrush></Border.Background>
+                    </Border>
                     <local:MouseIllustration x:Name="HeroMouse" Accent="{DynamicResource Accent}" />
                     <local:MouseConnections x:Name="DiagramLinks" Visibility="Collapsed" IsHitTestVisible="False" />
                     <Canvas x:Name="MarkerCanvas">
@@ -210,12 +220,13 @@
                       <TextBlock x:Name="BackCalloutAction" />
                     </StackPanel>
                   </Grid>
-                  <StackPanel Grid.Row="1" HorizontalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+                  <DockPanel LastChildFill="True" Margin="3,0,3,4">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                       <RadioButton x:Name="TopViewButton" Content="Top view" Style="{StaticResource ViewChoice}" GroupName="MouseView" IsChecked="True" Checked="MouseView_Changed" Margin="0,0,6,0"/>
                       <RadioButton x:Name="LeftViewButton" Content="Left side" Style="{StaticResource ViewChoice}" GroupName="MouseView" Checked="MouseView_Changed"/>
                     </StackPanel>
-                  </StackPanel>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,8,0"><TextBlock Text="Button map" FontWeight="SemiBold" FontSize="16"/><TextBlock Text="Select a marker to edit its assignment." Style="{StaticResource Caption}" FontSize="12" Margin="0,3,0,0"/></StackPanel>
+                  </DockPanel>
                   <Expander Grid.Row="2" x:Name="ScopeExpander" Header="Input support" Margin="0,8,0,0">
                     <StackPanel>
                       <TextBlock x:Name="ScopeLabel" Style="{StaticResource Caption}" />
@@ -225,58 +236,62 @@
                       <CheckBox x:Name="ShowAuxiliaryCheck" Visibility="Collapsed" Content="Extra buttons (F13–F24)" Checked="ShowAuxiliary_Changed" Unchecked="ShowAuxiliary_Changed" Margin="0,10,0,0" />
                     </StackPanel>
                   </Expander>
-                </Grid></Grid>
+                </Grid>
+              </local:FacetedBorder>
             </Grid>
             <GridSplitter x:Name="InspectorSplitter" Visibility="Collapsed" Grid.Column="1" Style="{StaticResource WorkspaceSplitter}" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="InspectorSplitter_DragCompleted" ToolTip="Drag to resize settings" AutomationProperties.Name="Resize settings panel"/>
-            <Border x:Name="DeviceInspector" Grid.Column="2" Visibility="Collapsed" Background="{DynamicResource Panel}">
+            <local:FacetedBorder x:Name="DeviceInspector" Grid.Column="2" Visibility="Collapsed" Margin="0,13,18,14" Background="{DynamicResource DashboardCard}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="28">
               <Grid>
                 <StackPanel x:Name="InspectorEmpty" VerticalAlignment="Center" Margin="28"><TextBlock Text="Your mouse, your setup." FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="Choose a mouse on the left to edit its buttons and Click Circle." Style="{StaticResource Caption}" Margin="0,12,0,0"/></StackPanel>
-                <Border x:Name="MappingPage" Visibility="Collapsed" Padding="28,32,28,12">
+                <Border x:Name="MappingPage" Visibility="Collapsed" Padding="24,19,24,12">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition x:Name="EditorColumn" Width="*"/></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <StackPanel>
-                      <TextBlock x:Name="DeviceHeading" Text="Mouse settings" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                      <TextBlock Text="Assignments" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap"/>
 
                       <Grid x:Name="ProfileToolbar"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,20,0,0"><TextBlock Text="Settings for" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="ProfilesList" SelectionChanged="ProfilesList_SelectionChanged" DisplayMemberPath="Name" AutomationProperties.Name="Settings for application"/></StackPanel>
-                        <Button Grid.Column="1" Content="+ Add app" Click="AddProfile_Click" Margin="8,36,0,0" ToolTip="Create an app-specific Circle for this mouse" AutomationProperties.Name="Add app-specific Circle"/>
+                        <StackPanel Margin="0,14,0,0"><TextBlock Text="Application profile" Style="{StaticResource FieldLabel}"/><ComboBox x:Name="ProfilesList" SelectionChanged="ProfilesList_SelectionChanged" DisplayMemberPath="Name" AutomationProperties.Name="Application profile"/></StackPanel>
+                        <Button Grid.Column="1" Content="+ Add app" Click="AddProfile_Click" Margin="8,0,0,0" VerticalAlignment="Bottom" ToolTip="Add settings for an application on this mouse" AutomationProperties.Name="Add application profile"/>
                       </Grid>
                       <TextBlock x:Name="ProfileContext" Style="{StaticResource Caption}" FontSize="11" Margin="0,7,0,0"/>
                     </StackPanel>
                     <Border Grid.Row="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Margin="0,18,0,8">
-                      <StackPanel Orientation="Horizontal"><Button x:Name="MappingsNav" Content="Buttons" Style="{StaticResource ContextAction}" Click="MappingsNav_Click"/><Button x:Name="RingNav" Content="Edit Circle" Style="{StaticResource ContextAction}" Click="CircleTab_Click" Margin="12,0,0,0"/></StackPanel>
+                      <StackPanel Orientation="Horizontal" Margin="0,0,0,8"><Button x:Name="MappingsNav" Content="Buttons" Style="{StaticResource ContextAction}" Click="MappingsNav_Click"/><Button x:Name="RingNav" Content="Customize Circle" Style="{StaticResource ContextAction}" Click="CircleTab_Click" Margin="6,0,0,0"/></StackPanel>
                     </Border>
                     <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
                       <StackPanel>
                         <StackPanel x:Name="ButtonsContent">
                   <Expander x:Name="SourceExpander" IsExpanded="True" Template="{StaticResource PlainExpander}">
-                    <ListBox x:Name="BindingsList" SelectionChanged="BindingsList_SelectionChanged" AutomationProperties.Name="Mouse buttons" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox x:Name="BindingsList" SelectionChanged="BindingsList_SelectionChanged" KeyDown="BindingsList_KeyDown" AutomationProperties.Name="Mouse buttons" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                       <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                          <Setter Property="Padding" Value="8,12" />
-                          <Setter Property="Margin" Value="0" />
+                          <Setter Property="Padding" Value="0" />
+                          <Setter Property="Margin" Value="0,0,0,5" />
                         </Style>
                       </ListBox.ItemContainerStyle>
                       <ListBox.ItemTemplate>
                         <DataTemplate>
+                          <Button x:Name="EditBindingButton" Tag="{Binding}" Click="EditBinding_Click" HorizontalContentAlignment="Stretch" Padding="12,9"
+                                  AutomationProperties.Name="{Binding Name, StringFormat='Edit {0}'}">
                           <Grid>
                             <Grid.ColumnDefinitions>
                               <ColumnDefinition Width="28" />
                               <ColumnDefinition Width="*" />
                               <ColumnDefinition Width="*" />
-                              <ColumnDefinition Width="16" />
+                              <ColumnDefinition Width="36" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{Binding Glyph}" FontFamily="Segoe Fluent Icons" FontSize="18" Foreground="{DynamicResource Muted}"/>
                             <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
                             <TextBlock Grid.Column="2" Text="{Binding Summary}" FontSize="13" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="8,0" ToolTip="{Binding Summary}"/>
-                            <TextBlock Grid.Column="3" FontFamily="Segoe Fluent Icons" Text="" Foreground="{DynamicResource Muted}" FontSize="12" />
+                            <TextBlock Grid.Column="3" Text="Edit" Foreground="{DynamicResource Accent}" FontSize="12" HorizontalAlignment="Right" />
                           </Grid>
+                          </Button>
                         </DataTemplate>
                       </ListBox.ItemTemplate>
                     </ListBox>
                   </Expander>
-                  <Border x:Name="EditorPane" Visibility="Collapsed" Background="{DynamicResource Panel}" BorderThickness="0" CornerRadius="0" Padding="0,18,0,0" MinHeight="330">
+                  <Border x:Name="EditorPane" Visibility="Collapsed" Background="Transparent" Padding="0,10,0,0" MinHeight="310">
                     <Grid>
                       <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -292,7 +307,7 @@
                           <TextBlock x:Name="SelectedInputTitle" Text="Back button" FontSize="16" FontWeight="SemiBold" />
                           <TextBlock x:Name="SelectedInputHint" Text="Rear side button" Visibility="Collapsed"/>
                         </StackPanel>
-                        <Button x:Name="CloseBindingButton" Grid.Column="1" Content="Close" Click="CloseEditor_Click" FontSize="12" Padding="14,7" Margin="10,0,0,0" VerticalAlignment="Top" AutomationProperties.Name="Close button editor"/>
+                        <Button x:Name="CloseBindingButton" Grid.Column="1" Content="‹  All buttons" Click="CloseEditor_Click" FontSize="12" Padding="12,7" Margin="10,0,0,0" VerticalAlignment="Top" AutomationProperties.Name="Back to all mouse buttons"/>
                       </Grid>
                       <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
                         <StackPanel>
@@ -373,7 +388,7 @@
                   </Grid>
                 </Border>
               </Grid>
-            </Border>
+            </local:FacetedBorder>
           </Grid>
           <ContentControl x:Name="CircleWorkspaceHost" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
           <ScrollViewer x:Name="ProfilesPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32">
@@ -384,57 +399,60 @@
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel>
-                  <TextBlock Text="Profiles" FontSize="27" FontWeight="SemiBold" />
-                  <TextBlock Text="Separate defaults and application profiles for each mouse." Style="{StaticResource Caption}" Margin="0,9,0,0" />
+                  <TextBlock Text="Profiles" FontSize="35" FontWeight="SemiBold" />
+                  <TextBlock Text="Find default and app-specific settings by mouse." Style="{StaticResource Caption}" Margin="0,7,0,0" />
                 </StackPanel>
-                <Button Grid.Column="1" Content="Add app for selected mouse" Click="AddProfile_Click" Style="{StaticResource Primary}" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="Browse devices" Click="DevicesNav_Click" VerticalAlignment="Center" />
               </Grid>
+              <local:FacetedBorder x:Name="EmptyProfiles" Style="{StaticResource Surface}" Visibility="Collapsed">
+                <StackPanel><TextBlock Text="No saved mouse profiles" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="Open a mouse from Devices to set up its first profile." Style="{StaticResource Caption}" Margin="0,6,0,0"/></StackPanel>
+              </local:FacetedBorder>
               <ItemsControl x:Name="ProfileManagerList">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <Border Style="{StaticResource Surface}" Margin="0,0,0,14">
-                      <Grid>
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition />
-                          <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,22,0">
-                          <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" />
-                          <TextBlock Text="{Binding Target}" Style="{StaticResource Caption}" Margin="0,7,0,0" />
-                          <TextBlock Text="{Binding Scope}" Style="{StaticResource Caption}" Margin="0,5,0,0" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                          <Button Content="Rename" Tag="{Binding Id}" Click="RenameProfile_Click" Style="{StaticResource Quiet}" Margin="0,0,8,0" />
-                          <Button Content="Edit" Tag="{Binding Id}" Click="OpenProfile_Click" />
-                        </StackPanel>
-                      </Grid>
-                    </Border>
+                    <local:FacetedBorder Style="{StaticResource Surface}" Margin="0,0,0,14">
+                      <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8"><TextBlock Text="&#xE962;" FontFamily="Segoe Fluent Icons" Foreground="{DynamicResource Accent}" FontSize="18" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock Text="{Binding DeviceName}" FontSize="20" FontWeight="SemiBold"/></StackPanel>
+                        <ItemsControl ItemsSource="{Binding Profiles}">
+                          <ItemsControl.ItemTemplate><DataTemplate>
+                            <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DashboardEdge}" Padding="0,9,0,6">
+                              <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,18,0" VerticalAlignment="Center"><TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"/><TextBlock Text="{Binding Target}" Style="{StaticResource Caption}" Margin="0,2,0,0"/></StackPanel>
+                                <TextBlock Grid.Column="1" Text="{Binding AssignmentCount}" Foreground="{DynamicResource Muted}" Margin="0,0,18,0" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                  <Button Content="Rename" Tag="{Binding Id}" Click="RenameProfile_Click" Style="{StaticResource Quiet}" Margin="0,0,6,0" />
+                                  <Button Content="Open" Tag="{Binding Id}" Click="OpenProfile_Click" />
+                                </StackPanel>
+                              </Grid>
+                            </Border>
+                          </DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </local:FacetedBorder>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <Border Background="{DynamicResource PanelLight}" CornerRadius="12" Padding="22" Margin="0,12,0,0">
-                <TextBlock Text="Application switching stays within the same mouse. Without a matching application profile, that mouse uses its own default profile." Style="{StaticResource Caption}" />
-              </Border>
             </StackPanel>
           </ScrollViewer>
           <ScrollViewer x:Name="SetupPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32"><StackPanel MaxWidth="880" HorizontalAlignment="Left">
             <TextBlock x:Name="SetupStatusTitle" Text="Set up separate mouse controls" FontSize="25" FontWeight="SemiBold"/>
             <TextBlock x:Name="SetupStatusDescription" Style="{StaticResource Caption}" Margin="0,10,0,26" MaxWidth="690"/>
-            <Border Style="{StaticResource Surface}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Margin="0,0,70,0"><TextBlock Text="Device input support" FontWeight="SemiBold"/><TextBlock Text="Driverless Circle · optional exclusive remapping" Style="{StaticResource Caption}" Margin="0,6,0,0"/></StackPanel><TextBlock x:Name="SetupBackendState" Grid.Column="1" Text="Checking input" Foreground="{DynamicResource Muted}"/></Grid></Border>
+            <local:FacetedBorder Style="{StaticResource Surface}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Margin="0,0,70,0"><TextBlock Text="Device input support" FontWeight="SemiBold"/><TextBlock Text="Driverless Circle · optional exclusive remapping" Style="{StaticResource Caption}" Margin="0,6,0,0"/></StackPanel><TextBlock x:Name="SetupBackendState" Grid.Column="1" Text="Checking input" Foreground="{DynamicResource Muted}"/></Grid></local:FacetedBorder>
             <ItemsControl x:Name="SetupConnectionRows" Margin="0,18,0,20"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="16,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Margin="0,0,30,0"/><TextBlock Text="{Binding Routing}" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="12"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
             <StackPanel Orientation="Horizontal"><Button Content="Setup details" Click="SetupGuide_Click"/><Button Content="Use existing installation…" Click="SelectInputLibrary_Click" Style="{StaticResource Quiet}" Margin="12,0,0,0"/></StackPanel>
-            <Expander x:Name="SetupGuideExpander" Header="How device support works" Margin="0,20,0,0"><TextBlock Text="Driverless Click Circle uses Windows Raw Input to identify the exact mouse. Assign Click Circle to one of its five standard buttons or horizontal wheel directions, press Enable Circle, then test outside the editor. Assigned middle clicks replace the normal desktop click. Other triggers retain their original behavior. Click a Circle action to run it.&#10;&#10;Other button assignments, vertical wheel triggers and custom HID assignment drafts are not activated by this mode. Exclusive remapping uses the optional device input backend. Moushift never guesses a source from the last mouse moved and never installs a driver automatically." Style="{StaticResource Caption}" Margin="4,12,0,0" MaxWidth="680"/></Expander>
+            <Expander x:Name="SetupGuideExpander" Header="How device support works" Margin="0,20,0,0"><TextBlock Text="Assign Click Circle or Task View to a standard mouse button and select Enable Circle. Test the physical button outside Moushift. The middle button runs its assignment in place of a normal middle click. Other standard buttons also keep their normal behavior. Horizontal wheel directions can open Click Circle.&#10;&#10;Other shortcut assignments and vertical wheel triggers need exclusive input support. Custom HID assignments are saved as drafts." Style="{StaticResource Caption}" Margin="4,12,0,0" MaxWidth="680"/></Expander>
           </StackPanel></ScrollViewer>
           <ScrollViewer x:Name="AppearancePage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32">
             <StackPanel MaxWidth="880" HorizontalAlignment="Left">
-              <TextBlock Text="Settings" FontSize="27" FontWeight="SemiBold"/>
+              <TextBlock Text="Settings" FontSize="35" FontWeight="SemiBold"/>
               <TextBlock Text="Appearance and preferences for your workspace." Style="{StaticResource Caption}" Margin="0,8,0,28"/>
-              <Border Style="{StaticResource Surface}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="300"/></Grid.ColumnDefinitions>
+              <local:FacetedBorder Style="{StaticResource Surface}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="300"/></Grid.ColumnDefinitions>
                 <StackPanel Margin="0,0,40,0"><TextBlock Text="Appearance" FontSize="17" FontWeight="SemiBold"/><TextBlock Text="Applies immediately and stays saved on this computer." Style="{StaticResource Caption}" Margin="0,8,0,0"/></StackPanel>
                 <ComboBox x:Name="ThemeCombo" Grid.Column="1" DisplayMemberPath="Name" SelectedValuePath="Id" SelectionChanged="Theme_Changed" VerticalAlignment="Center" AutomationProperties.Name="Interface theme"/>
-              </Grid></Border>
-              <Border Style="{StaticResource Surface}" Margin="0,18,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Margin="0,0,28,0"><TextBlock Text="Input support" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="View the current assignment status for your devices." Style="{StaticResource Caption}" Margin="0,7,0,0"/></StackPanel><Button x:Name="SetupNav" Style="{StaticResource Quiet}" Grid.Column="1" VerticalAlignment="Center" Click="SetupNav_Click"><StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE713;" Margin="0,0,12,0"/><TextBlock Text="Details"/></StackPanel></Button></Grid></Border>
-              <Border Style="{StaticResource Surface}" Margin="0,18,0,0"><StackPanel><TextBlock Text="Click Circle" FontSize="17" FontWeight="SemiBold"/><TextBlock Text="Translucent selection with a clear accent outline. Your circle actions belong to each profile." Style="{StaticResource Caption}" Margin="0,8,0,18"/><Button Content="Preview circle" Click="PreviewRing_Click" HorizontalAlignment="Left"/></StackPanel></Border>
+              </Grid></local:FacetedBorder>
+              <local:FacetedBorder Style="{StaticResource Surface}" Margin="0,18,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Margin="0,0,28,0"><TextBlock Text="Input support" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="View the current assignment status for your devices." Style="{StaticResource Caption}" Margin="0,7,0,0"/></StackPanel><Button x:Name="SetupNav" Style="{StaticResource Quiet}" Grid.Column="1" VerticalAlignment="Center" Click="SetupNav_Click"><StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE713;" Margin="0,0,12,0"/><TextBlock Text="Details"/></StackPanel></Button></Grid></local:FacetedBorder>
+              <local:FacetedBorder Style="{StaticResource Surface}" Margin="0,18,0,0"><StackPanel><TextBlock Text="Click Circle" FontSize="17" FontWeight="SemiBold"/><TextBlock Text="Translucent selection with a clear accent outline. Your circle actions belong to each profile." Style="{StaticResource Caption}" Margin="0,8,0,18"/><Button Content="Preview circle" Click="PreviewRing_Click" HorizontalAlignment="Left"/></StackPanel></local:FacetedBorder>
             </StackPanel>
           </ScrollViewer>
           <ScrollViewer x:Name="AboutPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32">
@@ -447,33 +465,33 @@
                   <ColumnDefinition Width="22" />
                   <ColumnDefinition />
                 </Grid.ColumnDefinitions>
-                <Border Style="{StaticResource Surface}">
+                <local:FacetedBorder Style="{StaticResource Surface}">
                   <StackPanel>
                     <TextBlock Text="Button mapping" FontSize="19" FontWeight="SemiBold" />
                     <TextBlock Text="1. Open a connection or shared assignments.&#10;2. Select a button on the drawing, or identify it by pressing it.&#10;3. Choose an action and Apply.&#10;4. Enable assignments from the toolbar." Style="{StaticResource Caption}" Margin="0,15,0,0" />
                     <Button Content="Edit buttons" Click="SharedMappings_Click" HorizontalAlignment="Left" Margin="0,20,0,0" />
                   </StackPanel>
-                </Border>
-                <Border Grid.Column="2" Style="{StaticResource Surface}">
+                </local:FacetedBorder>
+                <local:FacetedBorder Grid.Column="2" Style="{StaticResource Surface}">
                   <StackPanel>
                     <TextBlock Text="Shortcuts and Click Circle" FontSize="19" FontWeight="SemiBold" />
-                    <TextBlock Text="Click the shortcut field and press a key combination.&#10;&#10;Assign Click Circle to a standard button on a selected mouse. Driverless mode opens its Circle while keeping the original click. Click an action to select it, click the center to leave a folder, or scroll over an adjustment. Hold-to-release selection is available with exclusive input support.&#10;&#10;Each profile has its own circle. Preview never executes actions." Style="{StaticResource Caption}" Margin="0,15,0,0" />
+                    <TextBlock Text="Click the shortcut field and press a key combination.&#10;&#10;Assign Click Circle to a standard mouse button to open its Circle, or choose Task View to open the Windows overview directly. Assigned middle clicks replace the original click. Click a Circle action to run it, click the center to leave a folder, or scroll over an adjustment. Hold-to-release selection is available with exclusive input support.&#10;&#10;Each profile has its own Circle. Preview shows its layout without running actions." Style="{StaticResource Caption}" Margin="0,15,0,0" />
                   </StackPanel>
-                </Border>
+                </local:FacetedBorder>
               </Grid>
-              <Border Style="{StaticResource Surface}" Margin="0,22,0,0">
+              <local:FacetedBorder Style="{StaticResource Surface}" Margin="0,22,0,0">
                 <StackPanel>
                   <TextBlock Text="Pause and quit" FontSize="19" FontWeight="SemiBold" />
                   <TextBlock x:Name="EmergencyHelp" Text="Pause stops assignments. The emergency shortcut appears in the status bar. Closing the window minimizes to the tray; choose Quit to exit." Style="{StaticResource Caption}" Margin="0,13,0,0" />
                 </StackPanel>
-              </Border>
-              <Border Style="{StaticResource Surface}" Margin="0,22,0,0">
+              </local:FacetedBorder>
+              <local:FacetedBorder Style="{StaticResource Surface}" Margin="0,22,0,0">
                 <StackPanel>
                   <TextBlock Text="Devices and profile scope" FontSize="19" FontWeight="SemiBold" />
-                  <TextBlock Text="Each mouse uses its own profile. A mouse without a matching profile keeps its normal buttons. Driverless mode activates standard-button and horizontal-wheel Click Circle assignments; assigned middle clicks replace the native click, while other triggers retain their original behavior and other saved actions stay inactive. The device list shows Windows connections; receiver presence does not confirm mouse power.&#10;&#10;Previously saved extra HID inputs are preserved; their assignment drafts are not live. DPI, lighting, and onboard memory are managed by the vendor app." Style="{StaticResource Caption}" Margin="0,13,0,0" />
+                  <TextBlock Text="Each mouse uses its own profile. Driverless mode supports Click Circle and Task View on standard buttons, and Click Circle on horizontal wheel directions. Assigned middle clicks replace the native click. Other triggers retain their normal behavior. A receiver can remain listed while its mouse is off.&#10;&#10;Extra HID assignments are stored as drafts. DPI, lighting, and onboard memory are managed by the vendor app." Style="{StaticResource Caption}" Margin="0,13,0,0" />
                 </StackPanel>
-              </Border>
-              <Border Style="{StaticResource Surface}" Margin="0,22,0,0">
+              </local:FacetedBorder>
+              <local:FacetedBorder Style="{StaticResource Surface}" Margin="0,22,0,0">
                 <StackPanel>
                   <TextBlock Text="Local data" FontSize="19" FontWeight="SemiBold" />
                   <TextBlock Text="Profiles are saved locally for this Windows account. Elevated applications may require Moushift to run with matching permissions." Style="{StaticResource Caption}" Margin="0,13,0,18" />
@@ -491,13 +509,13 @@
                     </ListBox>
                   </Expander>
                 </StackPanel>
-              </Border>
+              </local:FacetedBorder>
               <TextBlock x:Name="AboutVersionText" Text="Moushift · Windows" Style="{StaticResource Caption}" Margin="0,24,0,8" />
             </StackPanel>
           </ScrollViewer>
         </Grid>
       </Grid>
-      <Grid Grid.Row="2" Grid.Column="1" Margin="24,0" MaxWidth="1600">
+      <Grid Grid.Row="2" Margin="22,0" MaxWidth="1600">
         <Grid.ColumnDefinitions>
           <ColumnDefinition />
           <ColumnDefinition Width="Auto" />

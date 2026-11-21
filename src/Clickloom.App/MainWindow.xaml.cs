@@ -75,6 +75,7 @@ public partial class MainWindow : Window
             new ActionChoice(ActionKind.Text, "Type text"),
             new ActionChoice(ActionKind.LaunchApplication, "Open application"),
             new ActionChoice(ActionKind.Ring, "Click Circle"),
+            new ActionChoice(ActionKind.TaskView, "Task View"),
             new ActionChoice(ActionKind.Disabled, "No action")
         };
         MouseOutputCombo.ItemsSource = MouseNames.Take(5).Select(p => new MouseChoice(p.Control, p.Name)).ToArray();
@@ -163,10 +164,11 @@ public partial class MainWindow : Window
             if (verifyEditor)
             {
                 DeviceCard_Click(new System.Windows.Controls.Button { Tag = _deviceCards.FirstOrDefault(c => c.DeviceKey is not null) ?? new DeviceCard("test:editor", "Editor test mouse", "TEST", "Fixture", ThemeManager.Brush("Accent"), "test:editor") }, new RoutedEventArgs());
-                if (MappingPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Visible || EditorPane.Visibility != Visibility.Collapsed)
-                    throw new InvalidOperationException("Device selection did not retain the gallery beside its inspector with the action form closed.");
+                if (MappingPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Collapsed
+                    || DeviceDetailPage.Visibility != Visibility.Visible || EditorPane.Visibility != Visibility.Collapsed)
+                    throw new InvalidOperationException("Device selection did not open the selected mouse and its assignments with the action form closed.");
                 if (BackCallout.Tag?.ToString() != "XButton1" || ForwardCallout.Tag?.ToString() != "XButton2"
-                    || Grid.GetRow(BackCallout) <= Grid.GetRow(ForwardCallout)
+                    || HeroMouse.Anchor(MouseControl.XButton1).Y <= HeroMouse.Anchor(MouseControl.XButton2).Y
                     || MouseName(MouseControl.XButton1) != "Back button" || MouseName(MouseControl.XButton2) != "Forward button")
                     throw new InvalidOperationException("Back/front side-button identity or physical diagram position is reversed.");
                 MouseCallout_Click(BackCallout, new RoutedEventArgs());
@@ -370,7 +372,8 @@ public partial class MainWindow : Window
         SavedActionText.Text = "Saved: " + (action.Kind == ActionKind.Passthrough ? "Default behavior" : DescribeAction(action));
         ApplyBindingButton.Content = row.LearnedId is not null ? "Save draft" : "Apply";
         if (row.LearnedId is not null) SavedActionText.Text = "Draft: " + DescribeAction(action) + " · not active";
-        else if (action.Kind == ActionKind.Ring && !(EditingProfile.DeviceKey is { } routeKey && _service?.CanRouteDevice(routeKey) == true))
+        else if (action.Kind == ActionKind.Ring && row.Mouse != MouseControl.MiddleButton
+            && !(EditingProfile.DeviceKey is { } routeKey && _service?.CanRouteDevice(routeKey) == true))
             SavedActionText.Text = "Saved: Click Circle + original input";
         if (row.Mouse is { } inheritedMouse && EditingProfile.ApplicationPath is not null && action.Kind == ActionKind.Ring
             && EditingProfile.Bindings.FirstOrDefault(b => b.Input == inheritedMouse)?.Action.Kind is null or ActionKind.Passthrough)
@@ -380,7 +383,7 @@ public partial class MainWindow : Window
             ? "Assign an extra mouse button that sends a keyboard key."
             : InputPresentation.Position(row.Mouse!.Value);
         _draftKeyCode = action.KeyCode; _draftModifiers = action.Modifiers;
-        ActionCombo.SelectedValue = action.Kind;
+        ActionCombo.SelectedValue = action.IsTaskViewAssignment ? ActionKind.TaskView : action.Kind;
         MouseOutputCombo.SelectedValue = action.MouseOutput;
         TextActionBox.Text = action.Text;
         ApplicationPathBox.Text = action.ApplicationPath;
@@ -400,7 +403,9 @@ public partial class MainWindow : Window
         TextPanel.Visibility = choice.Kind == ActionKind.Text ? Visibility.Visible : Visibility.Collapsed;
         LaunchPanel.Visibility = choice.Kind == ActionKind.LaunchApplication ? Visibility.Visible : Visibility.Collapsed;
         RingPanel.Visibility = choice.Kind == ActionKind.Ring ? Visibility.Visible : Visibility.Collapsed;
-        ActionDescriptionBox.Visibility = choice.Kind == ActionKind.Ring ? Visibility.Visible : Visibility.Collapsed;
+        ActionDescriptionBox.Visibility = choice.Kind is ActionKind.Ring or ActionKind.TaskView ? Visibility.Visible : Visibility.Collapsed;
+        var input = BindingsList.SelectedItem as BindingRow;
+        bool exclusive = EditingProfile.DeviceKey is { } key && _service?.CanRouteDevice(key) == true;
         ActionDescription.Text = choice.Kind switch
         {
             ActionKind.Passthrough => "Keeps the button's normal behavior.",
@@ -409,8 +414,13 @@ public partial class MainWindow : Window
             ActionKind.MouseButton => "Supports holding and dragging.",
             ActionKind.Text => "Types text into the focused application.",
             ActionKind.LaunchApplication => "Opens your selected local application.",
-            ActionKind.Ring => EditingProfile.DeviceKey is { } key && _service?.CanRouteDevice(key) == true ? "Opens the Click Circle beside your pointer."
-                : "Circle opens alongside the original input. This mode does not replace the input. Per-mouse replacement requires exclusive input support; no driver is installed automatically.",
+            ActionKind.Ring when exclusive => "Opens the Click Circle beside your pointer.",
+            ActionKind.Ring when input?.Mouse == MouseControl.MiddleButton => "Opens Click Circle in place of the normal middle click.",
+            ActionKind.Ring => "Opens Click Circle while keeping the button’s normal behavior in driverless mode.",
+            ActionKind.TaskView when input?.LearnedId is not null => "Saves a Task View draft. Learned HID inputs cannot run assignments yet.",
+            ActionKind.TaskView when exclusive || input?.Mouse == MouseControl.MiddleButton => "Opens Windows Task View (Win + Tab) in place of the original input.",
+            ActionKind.TaskView when input?.Mouse is MouseControl.LeftButton or MouseControl.RightButton or MouseControl.XButton1 or MouseControl.XButton2 => "Opens Windows Task View (Win + Tab). In driverless mode this button also keeps its normal behavior.",
+            ActionKind.TaskView => "This input needs exclusive input support to open Task View.",
             _ => ""
         };
     }
@@ -437,7 +447,7 @@ public partial class MainWindow : Window
     private void SaveBinding_Click(object sender, RoutedEventArgs e)
     {
         if (BindingsList.SelectedItem is not BindingRow row || ActionCombo.SelectedItem is not ActionChoice choice) return;
-        var action = new InputAction
+        var action = choice.Kind == ActionKind.TaskView ? InputAction.CreateTaskViewAssignment() : new InputAction
         {
             Kind = choice.Kind, KeyCode = choice.Kind == ActionKind.Shortcut ? _draftKeyCode : 0,
             Modifiers = choice.Kind == ActionKind.Shortcut ? _draftModifiers : KeyModifiers.None,
@@ -522,7 +532,26 @@ public partial class MainWindow : Window
     }
 
     private void BindingsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    { if (!_loading) { LoadSelectedBinding(); OpenEditor(); } }
+    { if (!_loading) LoadSelectedBinding(); }
+
+    private void EditBinding_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { Tag: BindingRow row }) EditBinding(row);
+    }
+
+    private void BindingsList_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || BindingsList.SelectedItem is not BindingRow row) return;
+        e.Handled = true;
+        EditBinding(row);
+    }
+
+    private void EditBinding(BindingRow row)
+    {
+        if (ReferenceEquals(BindingsList.SelectedItem, row)) LoadSelectedBinding();
+        else BindingsList.SelectedItem = row;
+        OpenEditor();
+    }
     private void ShowAuxiliary_Changed(object sender, RoutedEventArgs e)
     { if (!_loading) { RefreshBindings(); if (ShowAuxiliaryCheck.IsChecked == true) SourceExpander.IsExpanded = true; } }
     private void ActionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { UpdateActionPanels(); MarkEditorChanged(); }
@@ -573,7 +602,7 @@ public partial class MainWindow : Window
             }
             _service.SetEnabled(!_service.IsEnabled);
             StatusText.Text = _service.IsEnabled
-                ? _service.DriverlessCircleMode ? "Click Circle enabled for each mouse · Assigned middle clicks are replaced. Other middle clicks are forwarded."
+                ? _service.DriverlessCircleMode ? "Click Circle and Task View enabled for each mouse. Assigned middle clicks are replaced."
                     : "Assignments enabled · Your saved actions are active."
                 : "Assignments paused · Normal mouse behavior.";
             UpdateEngineState();
@@ -649,7 +678,7 @@ public partial class MainWindow : Window
     }
 
     private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
-    private void DevicesNav_Click(object sender, RoutedEventArgs e) { ShowPage("devices"); RefreshDevices(); }
+    private void DevicesNav_Click(object sender, RoutedEventArgs e) { ShowPage("devices"); if (!_previewOnly) RefreshDevices(); }
     private void AboutNav_Click(object sender, RoutedEventArgs e) => ShowPage("about");
     private void ShowPage(string page)
     {
@@ -657,7 +686,7 @@ public partial class MainWindow : Window
         if (!TryCloseCircleEditor()) return;
         if (page == "devices")
         {
-            _selectedDevice = null; _editingSavedProfile = false;
+            _selectedDevice = null; _editingSavedProfile = false; _returnToProfiles = false;
             foreach (var card in _deviceCards) card.IsSelected = false;
         }
         bool workspace = page is "devices" or "mappings";
@@ -675,8 +704,9 @@ public partial class MainWindow : Window
         if (workspace && _selectedDevice?.DeviceKey is not null)
         {
             _selectedDevice ??= GlobalDeviceCard();
-            DeviceHeading.Text = _selectedDevice.Name;
             DetailHeading.Text = _selectedDevice.Name;
+            DetailBackButton.Content = _returnToProfiles ? "‹  Profiles" : "‹  All mice";
+            System.Windows.Automation.AutomationProperties.SetName(MappingPage, "Assignments for " + _selectedDevice.Name);
             DetailBatteryInfo.Content = _selectedDevice;
             HeroMouse.SetResourceReference(MouseIllustration.AccentProperty, "Accent");
             DeviceScopeCheck.IsEnabled = _selectedDevice.DeviceKey is not null && (_service?.HasDeviceRouting == true || _service?.CanTriggerCircleForDevice(_selectedDevice.DeviceKey) == true);
@@ -690,9 +720,9 @@ public partial class MainWindow : Window
         {
             navigation.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, selected ? "Ink" : "Muted");
             navigation.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
-            navigation.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, selected ? "Selection" : "Sidebar");
-            navigation.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, selected ? "Accent" : "Sidebar");
-            navigation.BorderThickness = new Thickness(selected && (navigation == DevicesNav || navigation == ProfilesNav || navigation == AppearanceNav || navigation == AboutNav) ? 3 : 0, 0, 0, 0);
+            navigation.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, selected ? "Selection" : "TransparentBrush");
+            navigation.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, selected ? "Accent" : "TransparentBrush");
+            navigation.BorderThickness = new Thickness(1);
         }
         PageTitle.Text = page switch { "devices" => "Devices", "about" => "Help", "profiles" => "Profiles", "appearance" => "Settings", "setup" => "Input support", _ => "Customize" };
         if (workspace) SetInspectorTab(ButtonsContent.Visibility == Visibility.Collapsed);
@@ -731,6 +761,7 @@ public partial class MainWindow : Window
         if (!TryCloseCircleEditor()) return;
         _selectedDevice = device;
         _editingSavedProfile = false;
+        _returnToProfiles = false;
         var profile = _settings.Profiles.FirstOrDefault(p => p.DeviceKey == device.DeviceKey && p.ApplicationPath is null);
         if (profile is null)
         {
@@ -748,13 +779,18 @@ public partial class MainWindow : Window
     private void MouseCallout_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button button || !Enum.TryParse<MouseControl>(button.Tag?.ToString(), out var input)) return;
-        BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == input);
-        LoadSelectedBinding();
-        OpenEditor();
+        EditBinding(_bindings.Single(row => row.Mouse == input));
     }
     private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
     private void CloseEditor() { EditorPane.Visibility = Visibility.Collapsed; SourceExpander.Visibility = Visibility.Visible; }
-    private void CloseEditor_Click(object sender, RoutedEventArgs e) => CloseEditor();
+    private void CloseEditor_Click(object sender, RoutedEventArgs e)
+    {
+        CloseEditor();
+        BindingsList.ScrollIntoView(BindingsList.SelectedItem);
+        BindingsList.UpdateLayout();
+        if (BindingsList.ItemContainerGenerator.ContainerFromItem(BindingsList.SelectedItem) is System.Windows.Controls.ListBoxItem row)
+            row.Focus();
+    }
 
     private void DeviceScope_Changed(object sender, RoutedEventArgs e)
     {
@@ -819,6 +855,7 @@ public partial class MainWindow : Window
             label.Text = action is null || action.Kind == ActionKind.Passthrough ? fallback : DescribeAction(action);
             button.BorderBrush = ThemeManager.Brush(selected == input ? "Accent" : "Ink");
             button.Background = ThemeManager.Brush(selected == input ? "PrimaryFill" : "Panel");
+            button.Foreground = ThemeManager.Brush(selected == input ? "PrimaryInk" : "Ink");
             button.ToolTip = MouseName(input) + " · " + label.Text;
         }
     }
