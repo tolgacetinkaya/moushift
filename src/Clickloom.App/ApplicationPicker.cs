@@ -55,7 +55,8 @@ internal sealed class ApplicationPicker : Grid, IDisposable
         _list.ItemTemplate = new DataTemplate { VisualTree = stack };
         _list.SelectionChanged += (_, _) => UpdateSelection();
         _list.MouseDoubleClick += (_, _) => Choose();
-        var listSurface = new Border { Child = _list, Background = ThemeManager.Brush("Panel"), CornerRadius = new(14) };
+        var listSurface = new FacetedBorder { Child = _list, Background = ThemeManager.Brush("Panel"),
+            BorderBrush = ThemeManager.Brush("DashboardEdge"), BorderThickness = new(1), Padding = new(12, 6, 12, 6) };
         Grid.SetRow(listSurface, 2); content.Children.Add(listSurface);
         var footer = new StackPanel { Margin = new(0, 14, 0, 0) };
         footer.Children.Add(_status); _selection.Margin = new(0, 8, 0, 12); footer.Children.Add(_selection);

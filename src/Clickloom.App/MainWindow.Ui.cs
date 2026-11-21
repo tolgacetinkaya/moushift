@@ -22,11 +22,18 @@ public partial class MainWindow
     }
     private void UpdateProfileManager()
     {
-        ProfileManagerList.ItemsSource = _settings.Profiles.Where(p => p.DeviceKey is not null).Select(profile => new ProfileSummary(
-            profile.Id, profile.Name,
-            profile.ApplicationPath is null ? "All applications" : System.IO.Path.GetFileName(profile.ApplicationPath),
-            (profile.DeviceName ?? _connections.FirstOrDefault(c => c.Key == profile.DeviceKey)?.Name ?? "Disconnected mouse") + " · "
-                + (profile.Bindings.Count(binding => binding.Action.Kind != ActionKind.Passthrough) + profile.AuxiliaryKeys.Count) + " assigned buttons")).ToArray();
+        var groups = _settings.Profiles.Where(profile => profile.DeviceKey is not null).GroupBy(profile => profile.DeviceKey)
+            .Select(group => new ProfileGroup(
+                _deviceCards.FirstOrDefault(card => card.DeviceKey == group.Key)?.Name
+                    ?? group.Select(profile => profile.DeviceName).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name))
+                    ?? "Saved mouse",
+                group.OrderBy(profile => profile.ApplicationPath is not null).ThenBy(profile => profile.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .Select(profile => new ProfileSummary(profile.Id, profile.Name,
+                        profile.ApplicationPath is null ? "All applications" : System.IO.Path.GetFileName(profile.ApplicationPath),
+                        profile.Bindings.Count(binding => binding.Action.Kind != ActionKind.Passthrough) + profile.AuxiliaryKeys.Count)).ToArray()))
+            .OrderBy(group => group.DeviceName, StringComparer.CurrentCultureIgnoreCase).ToArray();
+        ProfileManagerList.ItemsSource = groups;
+        EmptyProfiles.Visibility = groups.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
     private void ProfilesNav_Click(object sender, RoutedEventArgs e) { UpdateProfileManager(); ShowPage("profiles"); }
     private void OpenProfile_Click(object sender, RoutedEventArgs e)
@@ -35,6 +42,7 @@ public partial class MainWindow
         var profile = _settings.Profiles.FirstOrDefault(p => p.Id == id);
         if (profile is null || profile.DeviceKey is null) { ShowPage("devices"); return; }
         _editingSavedProfile = true;
+        _returnToProfiles = true;
         _selectedDevice = profile.DeviceKey is null ? GlobalDeviceCard()
             : new(profile.DeviceKey, profile.DeviceName ?? _connections.FirstOrDefault(c => c.Key == profile.DeviceKey)?.Name ?? "Saved mouse", "PROFILE", "Saved profile", (System.Windows.Media.Brush)FindResource("Accent"), profile.DeviceKey);
         _loading = true; _deviceScope = profile.DeviceKey is not null; DeviceScopeCheck.IsChecked = _deviceScope;
@@ -79,6 +87,9 @@ public partial class MainWindow
         OpenProfile_Click(new Button { Tag = profile.Id }, new RoutedEventArgs());
         if (EditingProfile.Id != profile.Id || MappingPage.Visibility != Visibility.Visible)
             throw new InvalidOperationException("Profile manager opened a different profile.");
+        BackToGallery_Click(this, new RoutedEventArgs());
+        if (ProfilesPage.Visibility != Visibility.Visible) throw new InvalidOperationException("Profile details did not return to Profiles.");
+        OpenProfile_Click(new Button { Tag = profile.Id }, new RoutedEventArgs());
         string oldName = profile.Name;
         if (!ApplyProfileName(profile.Id, "Rename test")) throw new InvalidOperationException("Profile rename failed.");
         var saved = _store.Load().Settings.Profiles.Single(p => p.Id == profile.Id);
@@ -91,5 +102,9 @@ public partial class MainWindow
         if (!CommitSettings(restore, "Ready")) throw new InvalidOperationException("UI profile cleanup failed.");
         PopulateProfiles(); RefreshBindings(MouseControl.XButton1); OpenEditor();
     }
-    private sealed record ProfileSummary(Guid Id, string Name, string Target, string Scope);
+    private sealed record ProfileGroup(string DeviceName, IReadOnlyList<ProfileSummary> Profiles);
+    private sealed record ProfileSummary(Guid Id, string Name, string Target, int AssignedButtons)
+    {
+        public string AssignmentCount => AssignedButtons == 1 ? "1 assigned button" : $"{AssignedButtons} assigned buttons";
+    }
 }

@@ -92,7 +92,7 @@ public sealed class ShortcutSelector : UserControl
         else foreach (string part in _capture.Text.Split(" + "))
         {
             if (_keyCaps.Children.Count > 0) _keyCaps.Children.Add(new TextBlock { Text = "+", FontSize = 11, Foreground = ThemeManager.Brush("Muted"), Margin = new(6, 0, 6, 0) });
-            _keyCaps.Children.Add(new Border { Background = ThemeManager.Brush("Panel"), BorderBrush = ThemeManager.Brush("Line"), BorderThickness = new(1), CornerRadius = new(5), Padding = new(9, 4, 9, 4), Child = new TextBlock { Text = part, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = ThemeManager.Brush("Ink") } });
+            _keyCaps.Children.Add(new FacetedBorder { Background = ThemeManager.Brush("Panel"), BorderBrush = ThemeManager.Brush("ControlEdge"), BorderThickness = new(1), Padding = new(9, 4, 9, 4), Child = new TextBlock { Text = part, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = ThemeManager.Brush("Ink") } });
         }
         _loading = false;
     }

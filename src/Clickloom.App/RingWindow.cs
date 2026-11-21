@@ -35,14 +35,8 @@ public sealed class RingWindow : Window
     public RingWindow(IReadOnlyList<RingSlot> slots, bool preview = false, bool driverless = false)
     {
         _root = slots; _preview = preview; _driverless = driverless;
-        _glass = CreateGlass();
-        if (!SystemParameters.HighContrast)
-        {
-            var shadow = new DropShadowEffect { Color = ThemeManager.Current == "dark" ? Colors.Black : Colors.White,
-                ShadowDepth = 0, BlurRadius = 4, Opacity = .9 };
-            shadow.Freeze();
-            _inkShadow = shadow;
-        }
+        _glass = CircleVisuals.Glass();
+        _inkShadow = CircleVisuals.GlassInkShadow();
         Width = Height = CircleSize; FontFamily = CircleVisuals.TextFont; WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true; Background = Brushes.Transparent; ShowActivated = false; ShowInTaskbar = false; Topmost = true;
         Content = _canvas; Draw();
@@ -105,23 +99,6 @@ public sealed class RingWindow : Window
         Canvas.SetTop(hintRow, _path.Count == 0 ? 351 : 433);
         _canvas.Children.Add(hintRow);
         UpdateCenter();
-    }
-
-    private static Brush CreateGlass()
-    {
-        if (SystemParameters.HighContrast) return ThemeManager.Brush("RingIdle");
-        var gloss = new RadialGradientBrush
-        {
-            Center = new Point(.38, .18), GradientOrigin = new Point(.33, .06), RadiusX = .88, RadiusY = .97,
-            GradientStops =
-            {
-                new(((SolidColorBrush)ThemeManager.Brush("CircleGlassTop")).Color, 0),
-                new(((SolidColorBrush)ThemeManager.Brush("CircleGlassMid")).Color, .58),
-                new(((SolidColorBrush)ThemeManager.Brush("CircleGlassBottom")).Color, 1)
-            }
-        };
-        gloss.Freeze();
-        return gloss;
     }
 
     private void AddNode(RingSlot slot, int[] path, Point position, bool emphasized)

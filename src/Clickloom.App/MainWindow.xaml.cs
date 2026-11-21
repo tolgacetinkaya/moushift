@@ -164,10 +164,11 @@ public partial class MainWindow : Window
             if (verifyEditor)
             {
                 DeviceCard_Click(new System.Windows.Controls.Button { Tag = _deviceCards.FirstOrDefault(c => c.DeviceKey is not null) ?? new DeviceCard("test:editor", "Editor test mouse", "TEST", "Fixture", ThemeManager.Brush("Accent"), "test:editor") }, new RoutedEventArgs());
-                if (MappingPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Visible || EditorPane.Visibility != Visibility.Collapsed)
-                    throw new InvalidOperationException("Device selection did not retain the gallery beside its inspector with the action form closed.");
+                if (MappingPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Collapsed
+                    || DeviceDetailPage.Visibility != Visibility.Visible || EditorPane.Visibility != Visibility.Collapsed)
+                    throw new InvalidOperationException("Device selection did not open the selected mouse and its assignments with the action form closed.");
                 if (BackCallout.Tag?.ToString() != "XButton1" || ForwardCallout.Tag?.ToString() != "XButton2"
-                    || Grid.GetRow(BackCallout) <= Grid.GetRow(ForwardCallout)
+                    || HeroMouse.Anchor(MouseControl.XButton1).Y <= HeroMouse.Anchor(MouseControl.XButton2).Y
                     || MouseName(MouseControl.XButton1) != "Back button" || MouseName(MouseControl.XButton2) != "Forward button")
                     throw new InvalidOperationException("Back/front side-button identity or physical diagram position is reversed.");
                 MouseCallout_Click(BackCallout, new RoutedEventArgs());
@@ -531,7 +532,26 @@ public partial class MainWindow : Window
     }
 
     private void BindingsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    { if (!_loading) { LoadSelectedBinding(); OpenEditor(); } }
+    { if (!_loading) LoadSelectedBinding(); }
+
+    private void EditBinding_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { Tag: BindingRow row }) EditBinding(row);
+    }
+
+    private void BindingsList_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || BindingsList.SelectedItem is not BindingRow row) return;
+        e.Handled = true;
+        EditBinding(row);
+    }
+
+    private void EditBinding(BindingRow row)
+    {
+        if (ReferenceEquals(BindingsList.SelectedItem, row)) LoadSelectedBinding();
+        else BindingsList.SelectedItem = row;
+        OpenEditor();
+    }
     private void ShowAuxiliary_Changed(object sender, RoutedEventArgs e)
     { if (!_loading) { RefreshBindings(); if (ShowAuxiliaryCheck.IsChecked == true) SourceExpander.IsExpanded = true; } }
     private void ActionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { UpdateActionPanels(); MarkEditorChanged(); }
@@ -658,7 +678,7 @@ public partial class MainWindow : Window
     }
 
     private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
-    private void DevicesNav_Click(object sender, RoutedEventArgs e) { ShowPage("devices"); RefreshDevices(); }
+    private void DevicesNav_Click(object sender, RoutedEventArgs e) { ShowPage("devices"); if (!_previewOnly) RefreshDevices(); }
     private void AboutNav_Click(object sender, RoutedEventArgs e) => ShowPage("about");
     private void ShowPage(string page)
     {
@@ -666,7 +686,7 @@ public partial class MainWindow : Window
         if (!TryCloseCircleEditor()) return;
         if (page == "devices")
         {
-            _selectedDevice = null; _editingSavedProfile = false;
+            _selectedDevice = null; _editingSavedProfile = false; _returnToProfiles = false;
             foreach (var card in _deviceCards) card.IsSelected = false;
         }
         bool workspace = page is "devices" or "mappings";
@@ -684,8 +704,9 @@ public partial class MainWindow : Window
         if (workspace && _selectedDevice?.DeviceKey is not null)
         {
             _selectedDevice ??= GlobalDeviceCard();
-            DeviceHeading.Text = _selectedDevice.Name;
             DetailHeading.Text = _selectedDevice.Name;
+            DetailBackButton.Content = _returnToProfiles ? "‹  Profiles" : "‹  All mice";
+            System.Windows.Automation.AutomationProperties.SetName(MappingPage, "Assignments for " + _selectedDevice.Name);
             DetailBatteryInfo.Content = _selectedDevice;
             HeroMouse.SetResourceReference(MouseIllustration.AccentProperty, "Accent");
             DeviceScopeCheck.IsEnabled = _selectedDevice.DeviceKey is not null && (_service?.HasDeviceRouting == true || _service?.CanTriggerCircleForDevice(_selectedDevice.DeviceKey) == true);
@@ -699,9 +720,9 @@ public partial class MainWindow : Window
         {
             navigation.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, selected ? "Ink" : "Muted");
             navigation.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
-            navigation.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, selected ? "Selection" : "Sidebar");
-            navigation.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, selected ? "Accent" : "Sidebar");
-            navigation.BorderThickness = new Thickness(selected && (navigation == DevicesNav || navigation == ProfilesNav || navigation == AppearanceNav || navigation == AboutNav) ? 3 : 0, 0, 0, 0);
+            navigation.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, selected ? "Selection" : "TransparentBrush");
+            navigation.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, selected ? "Accent" : "TransparentBrush");
+            navigation.BorderThickness = new Thickness(1);
         }
         PageTitle.Text = page switch { "devices" => "Devices", "about" => "Help", "profiles" => "Profiles", "appearance" => "Settings", "setup" => "Input support", _ => "Customize" };
         if (workspace) SetInspectorTab(ButtonsContent.Visibility == Visibility.Collapsed);
@@ -740,6 +761,7 @@ public partial class MainWindow : Window
         if (!TryCloseCircleEditor()) return;
         _selectedDevice = device;
         _editingSavedProfile = false;
+        _returnToProfiles = false;
         var profile = _settings.Profiles.FirstOrDefault(p => p.DeviceKey == device.DeviceKey && p.ApplicationPath is null);
         if (profile is null)
         {
@@ -757,13 +779,18 @@ public partial class MainWindow : Window
     private void MouseCallout_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button button || !Enum.TryParse<MouseControl>(button.Tag?.ToString(), out var input)) return;
-        BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == input);
-        LoadSelectedBinding();
-        OpenEditor();
+        EditBinding(_bindings.Single(row => row.Mouse == input));
     }
     private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
     private void CloseEditor() { EditorPane.Visibility = Visibility.Collapsed; SourceExpander.Visibility = Visibility.Visible; }
-    private void CloseEditor_Click(object sender, RoutedEventArgs e) => CloseEditor();
+    private void CloseEditor_Click(object sender, RoutedEventArgs e)
+    {
+        CloseEditor();
+        BindingsList.ScrollIntoView(BindingsList.SelectedItem);
+        BindingsList.UpdateLayout();
+        if (BindingsList.ItemContainerGenerator.ContainerFromItem(BindingsList.SelectedItem) is System.Windows.Controls.ListBoxItem row)
+            row.Focus();
+    }
 
     private void DeviceScope_Changed(object sender, RoutedEventArgs e)
     {
@@ -828,6 +855,7 @@ public partial class MainWindow : Window
             label.Text = action is null || action.Kind == ActionKind.Passthrough ? fallback : DescribeAction(action);
             button.BorderBrush = ThemeManager.Brush(selected == input ? "Accent" : "Ink");
             button.Background = ThemeManager.Brush(selected == input ? "PrimaryFill" : "Panel");
+            button.Foreground = ThemeManager.Brush(selected == input ? "PrimaryInk" : "Ink");
             button.ToolTip = MouseName(input) + " · " + label.Text;
         }
     }

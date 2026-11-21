@@ -71,6 +71,13 @@ public partial class MainWindow
             throw new InvalidOperationException("Three device cards are not side by side.");
         firstCard.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.MiddleButton);
+        var editButton = (System.Windows.Controls.Button)BindingsList.ItemTemplate.LoadContent();
+        editButton.Tag = BindingsList.SelectedItem;
+        editButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        if (EditorPane.Visibility != Visibility.Visible) throw new InvalidOperationException("Edit did not open the selected button.");
+        CloseEditor();
+        editButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        if (EditorPane.Visibility != Visibility.Visible) throw new InvalidOperationException("Edit could not reopen the same selected button.");
         ActionCombo.SelectedValue = ActionKind.Ring; SaveBinding_Click(this, new RoutedEventArgs());
         BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.XButton1);
         ActionCombo.SelectedValue = ActionKind.Shortcut; _draftKeyCode = 9; _draftModifiers = KeyModifiers.Alt; UpdateShortcutDisplay(); SaveBinding_Click(this, new RoutedEventArgs());
@@ -89,7 +96,7 @@ public partial class MainWindow
         if (!taskView.IsTaskViewAssignment || !Equals(ActionCombo.SelectedValue, ActionKind.TaskView))
             throw new InvalidOperationException("Task View did not save as a shortcut and return as a named editor choice.");
         if (savedProfiles.Single(p => p.DeviceKey == b.Key).Bindings.Any(x => x.Action.Kind != ActionKind.Passthrough)) throw new InvalidOperationException("Storage leaked assignments across mice.");
-        if (DeviceHeading.Text != a.Name) throw new InvalidOperationException("A card opened another device's settings heading.");
+        if (DetailHeading.Text != a.Name) throw new InvalidOperationException("A card opened another device's settings heading.");
         VerifyProfileScreens();
         var fixtures = new[] {
             new Clickloom.Windows.MouseConnection(a.Key, a.Name, "TEST", "USB", true, false, ["fixture:a"]),
@@ -108,6 +115,13 @@ public partial class MainWindow
         ApplyConnectionInventory(fixtures);
         if (_deviceCards.Count != 3 || !_deviceCards.Single(d => d.Key == a.Key).Detail.Contains("unconfirmed") || _deviceCards.Any(d => d.Activity == "Input just now"))
             throw new InvalidOperationException("A connected receiver was hidden or reconnect reused old activity.");
-        CloseEditor(); Console.WriteLine("PASS isolated WPF gallery: three cards, scoped profiles, disconnect/reconnect, receiver status and preserved assignments; no windows or input.");
+        PrepareDesignFixture();
+        BindingsList.SelectedItem = _bindings.Single(row => row.Mouse == MouseControl.MiddleButton);
+        ActionCombo.SelectedValue = ActionKind.TaskView; SaveBinding_Click(this, new RoutedEventArgs());
+        _settings = _store.Load().Settings;
+        PrepareDesignFixture();
+        if (!EditingProfile.Bindings.Single(x => x.Input == MouseControl.MiddleButton).Action.IsTaskViewAssignment)
+            throw new InvalidOperationException("Preview initialization replaced an edited assignment after reloading settings.");
+        CloseEditor(); Console.WriteLine("PASS isolated WPF gallery: three cards, re-opening the same button, scoped profiles, disconnect/reconnect, receiver status and preserved assignments; no windows or input.");
     }
 }

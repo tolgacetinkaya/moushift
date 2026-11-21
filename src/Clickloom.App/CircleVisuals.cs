@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using Clickloom.Core;
 
 namespace Clickloom.App;
@@ -13,6 +15,33 @@ internal static class CircleVisuals
     public const string RedoIcon = "\uE7A6";
     public const string BackIcon = "\uE72B";
     private static readonly Geometry UndoArrow = Geometry.Parse("M 9,3 L 4,8 L 9,13 M 4,8 H 15 A 5,5 0 0 1 15,18 H 10");
+
+    public static Brush Glass()
+    {
+        if (SystemParameters.HighContrast) return ThemeManager.Brush("RingIdle");
+        return new RadialGradientBrush
+        {
+            Center = new(.38, .18), GradientOrigin = new(.33, .06), RadiusX = .88, RadiusY = .97,
+            GradientStops = { GlassStop("CircleGlassTop", 0), GlassStop("CircleGlassMid", .58), GlassStop("CircleGlassBottom", 1) }
+        };
+    }
+
+    public static Effect? GlassInkShadow()
+    {
+        if (SystemParameters.HighContrast) return null;
+        var shadow = new DropShadowEffect { ShadowDepth = 0, BlurRadius = 4, Opacity = .9 };
+        BindingOperations.SetBinding(shadow, DropShadowEffect.ColorProperty, BrushColor("CircleInkHalo"));
+        return shadow;
+    }
+
+    private static GradientStop GlassStop(string brush, double offset)
+    {
+        var stop = new GradientStop { Offset = offset };
+        BindingOperations.SetBinding(stop, GradientStop.ColorProperty, BrushColor(brush));
+        return stop;
+    }
+
+    private static Binding BrushColor(string name) => new(nameof(SolidColorBrush.Color)) { Source = ThemeManager.Brush(name), Mode = BindingMode.OneWay };
 
     public static FrameworkElement IconVisual(string icon, double size, Brush foreground)
     {

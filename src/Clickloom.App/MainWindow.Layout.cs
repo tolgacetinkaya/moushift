@@ -7,8 +7,10 @@ public partial class MainWindow
 {
     internal void EnterInteractivePreview()
     {
-        EngineBadge.Text = "UI preview · engine disabled";
+        EngineBadge.Text = "Preview · hardware control off";
+        EnableButton.Content = "Enable Circle";
         EnableButton.IsEnabled = false;
+        StatusText.Text = "Preview · edits save in the preview only";
     }
     private bool _layoutEventsBound;
     private void Layout_Loaded(object sender, RoutedEventArgs e)
@@ -21,27 +23,38 @@ public partial class MainWindow
     {
         double width = ActualWidth > 0 ? ActualWidth : Width, height = ActualHeight > 0 ? ActualHeight : Height;
         bool collapsed = _workspacePreferences.SidebarCollapsed;
-        SidebarColumn.Width = new GridLength(collapsed ? 68 : 190);
         Resources["SidebarLabelVisibility"] = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        Resources["SidebarIconMargin"] = collapsed ? new Thickness(0) : new Thickness(0, 0, 12, 0);
+        Resources["SidebarIconMargin"] = collapsed ? new Thickness(0) : new Thickness(0, 0, 8, 0);
         SidebarToggleIcon.Text = collapsed ? "\uE76C" : "\uE76B";
-        SidebarToggle.ToolTip = collapsed ? "Expand navigation" : "Collapse navigation";
+        SidebarToggle.ToolTip = collapsed ? "Show navigation labels" : "Hide navigation labels";
         bool detail = DevicesWorkspace.Visibility == Visibility.Visible && DeviceDetailPage.Visibility == Visibility.Visible && _selectedDevice?.DeviceKey is not null;
         DeviceInspector.Visibility = InspectorSplitter.Visibility = detail ? Visibility.Visible : Visibility.Collapsed;
         InspectorColumn.MinWidth = detail ? 320 : 0;
-        InspectorColumn.Width = detail ? new GridLength(Math.Clamp(_workspacePreferences.InspectorWidth, 320, Math.Min(640, Math.Max(320, width - SidebarColumn.Width.Value - 396)))) : new GridLength(0);
+        InspectorColumn.Width = detail ? new GridLength(Math.Clamp(_workspacePreferences.InspectorWidth, 320, Math.Min(640, Math.Max(320, width - 396)))) : new GridLength(0);
         InspectorSplitterColumn.Width = new GridLength(detail ? 6 : 0);
-        double galleryWidth = width - SidebarColumn.Width.Value - InspectorColumn.Width.Value - 74;
-        int visible = _deviceCards.Count >= 3 && galleryWidth >= 750 ? 3 : 2;
-        Resources["DeviceTileWidth"] = Math.Clamp((galleryWidth - visible * 10) / visible, 218, 360);
-        Resources["DeviceTileHeight"] = Math.Clamp(height - 365, 380, 640);
+        double galleryWidth = width - 296;
+        int visible = Math.Clamp(_deviceCards.Count, 1, galleryWidth >= 555 ? 3 : 2);
+        Resources["DeviceTileWidth"] = Math.Clamp((galleryWidth - visible * 10) / visible, 172, 310);
+        Resources["DeviceTileHeight"] = Math.Clamp(height - 338, 350, 480);
+        UpdateDashboardOverview();
         // Action forms never determine the size of the artwork.
-        DiagramStage.Height = Math.Clamp(height - 370, 300, 580);
+        DiagramStage.MaxHeight = Math.Clamp(height - 334, 300, 550);
         BindingsList.Height = double.NaN;
         HeroMouse.MaxWidth = HeroMouse.View == MouseDrawingView.Left ? 620 : 400; HeroMouse.MaxHeight = 500;
         DiagramStage.MaxWidth = HeroMouse.View == MouseDrawingView.Left ? 660 : 440;
         EditorPane.Padding = new Thickness(0, 18, 0, 0);
         PlaceMarkers();
+    }
+    private void UpdateDashboardOverview()
+    {
+        int connections = _deviceCards.Count;
+        int receivers = _deviceCards.Count(card => card.ConnectionLabel == "Receiver connected");
+        DashboardConnectionCount.Text = connections.ToString();
+        DashboardReceiverCount.Text = receivers == 1 ? "1 receiver included" : $"{receivers} receivers included";
+        DashboardReceiverCount.Visibility = receivers > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var lowestBattery = _deviceCards.Where(card => card.BatteryPercent.HasValue).MinBy(card => card.BatteryPercent);
+        DashboardBattery.DataContext = lowestBattery;
+        DashboardBattery.Visibility = lowestBattery is null ? Visibility.Collapsed : Visibility.Visible;
     }
     private void PlaceMarkers()
     {
@@ -81,8 +94,15 @@ public partial class MainWindow
         var b = new DeviceCard("preview:logi", "MX Master 4", "Logitech", "Bluetooth interface connected · mouse availability unconfirmed", ThemeManager.Brush("Accent"), "preview:logi");
         b.BatteryPercent = 60; // Presentation-only value; never a live hardware reading.
         _deviceCards.Add(a); _deviceCards.Add(b);
+        bool newProfile = !_settings.Profiles.Any(profile => profile.DeviceKey == a.DeviceKey && profile.ApplicationPath is null);
         DeviceCard_Click(new Button { Tag = a }, new RoutedEventArgs());
-        EditingProfile.Bindings.Single(x => x.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
+        if (newProfile && EditingProfile.DeviceKey == a.DeviceKey)
+        {
+            var settings = _settings.DeepClone();
+            var sample = settings.Profiles.Single(profile => profile.Id == _editingProfileId);
+            sample.Bindings.Single(binding => binding.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
+            CommitSettings(settings, "Sample Circle assignment created");
+        }
         a.Activity = "Input detected"; b.Activity = "Last input recently";
         EmptyDevicesBox.Visibility = Visibility.Collapsed;
         EngineBadge.Text = "Circle enabled"; EnableButton.Content = "Pause";
@@ -103,9 +123,9 @@ public partial class MainWindow
         foreach (var (tab, selected) in new[] { (MappingsNav, !circle), (RingNav, circle) })
         {
             tab.SetResourceReference(Control.ForegroundProperty, selected ? "Accent" : "Muted");
-            tab.SetResourceReference(Control.BorderBrushProperty, selected ? "Accent" : "Panel");
-            tab.SetResourceReference(Control.BackgroundProperty, "Panel");
-            tab.BorderThickness = new Thickness(0, 0, 0, selected ? 2 : 0);
+            tab.SetResourceReference(Control.BorderBrushProperty, selected ? "Accent" : "ControlEdge");
+            tab.SetResourceReference(Control.BackgroundProperty, selected ? "Selection" : "ControlSurface");
+            tab.BorderThickness = new Thickness(1);
             tab.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
         }
     }
