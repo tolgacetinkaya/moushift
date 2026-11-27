@@ -9,7 +9,8 @@ public partial class MainWindow
 {
     internal void AddThirdDesignDevice()
     {
-        _deviceCards.Add(new("preview:razer", "Razer Mouse Dock Pro", "Razer", "Receiver connected", ThemeManager.Brush("Accent"), "preview:razer"));
+        var connection = new Clickloom.Windows.MouseConnection("preview:razer", "Razer Mouse Dock Pro", "Razer", "USB", true, false, []);
+        _deviceCards.Add(new(connection.Key, connection.DisplayName, connection.Manufacturer, connection.Status, ThemeManager.Brush("Accent"), connection.Key));
         ApplyWorkspaceSizing();
     }
 

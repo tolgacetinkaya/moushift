@@ -6,6 +6,20 @@ namespace Clickloom.Windows;
 public sealed record MouseConnection(string Key, string Name, string Manufacturer, string Transport, bool IsReceiver, bool IsAuxiliary, string[] DevicePaths)
 {
     public int? BatteryPercent { get; init; }
+    public string DisplayName
+    {
+        get
+        {
+            if (!IsReceiver || IsAuxiliary) return Name;
+            const string gamingDongle = " Gaming Dongle";
+            if (Name.EndsWith(gamingDongle, StringComparison.OrdinalIgnoreCase))
+            {
+                var model = Name[..^gamingDongle.Length].Trim();
+                if (model.Length != 0 && !model.Equals(Manufacturer, StringComparison.OrdinalIgnoreCase)) return model;
+            }
+            return Manufacturer == "Windows" ? "Wireless mouse" : Manufacturer + " mouse";
+        }
+    }
     public string Status => IsReceiver ? Transport + " receiver connected · mouse availability unconfirmed"
         : IsAuxiliary ? "Additional pointing interface"
         : Transport == "Bluetooth" ? "Bluetooth interface connected · mouse availability unconfirmed" : Transport + " mouse interface connected";

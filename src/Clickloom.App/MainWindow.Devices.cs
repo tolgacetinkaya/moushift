@@ -68,8 +68,9 @@ public partial class MainWindow
         for (int i = 0; i < rows.Length; i++)
         {
             var d = rows[i]; var current = target.FirstOrDefault(c => c.Key == d.Key);
-            if (current is null) target.Insert(i, new(d.Key, d.Name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key));
-            else if (current.Name != d.Name || current.Detail != d.Status) target[target.IndexOf(current)] = new(d.Key, d.Name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key);
+            string name = MouseDisplayName(d.Key, d.DisplayName);
+            if (current is null) target.Insert(i, new(d.Key, name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key));
+            else if (current.Name != name || current.Detail != d.Status) target[target.IndexOf(current)] = new(d.Key, name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key);
             else if (target.IndexOf(current) != i) target.Move(target.IndexOf(current), i);
         }
         foreach (var row in target) row.BatteryPercent = rows.First(d => d.Key == row.Key).BatteryPercent;
@@ -99,10 +100,28 @@ public partial class MainWindow
         DevicesList.ItemsSource = connections.Select(c => new DeviceRow(c.Name, c.Status + " · " + c.DevicePaths.Length + " input interfaces")).ToArray();
         DriverProfilesList.ItemsSource = _service?.HasDeviceRouting == true
             ? connections.Where(c => !c.IsAuxiliary && _service.CanRouteDevice(c.Key))
-                .Select(c => new DeviceCard(c.Key, c.Name, "DEVICE PROFILE", "Verified input route", ThemeManager.Brush("Accent"), c.Key)).ToArray() : [];
+                .Select(c => new DeviceCard(c.Key, MouseDisplayName(c.Key, c.DisplayName), "DEVICE PROFILE", "Verified input route", ThemeManager.Brush("Accent"), c.Key)).ToArray() : [];
         EmptyDevicesBox.Visibility = _deviceCards.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         PresenceDetails.Text = "Last scan at " + DateTime.Now.ToString("HH:mm:ss") + ".";
         ApplyWorkspaceSizing();
+    }
+    private string MouseDisplayName(string key, string fallback) =>
+        _workspacePreferences.MouseNames?.GetValueOrDefault(key) is { Length: > 0 and <= 128 } name ? name : fallback;
+
+    private void RenameMouse_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedDevice?.DeviceKey is not { } key) return;
+        var dialog = new ProfileNameWindow(_selectedDevice.Name, "mouse") { Owner = this };
+        if (dialog.ShowDialog() != true || _selectedDevice?.DeviceKey != key) return;
+        var names = new Dictionary<string, string>(_workspacePreferences.MouseNames ?? []);
+        names[key] = dialog.ProfileName;
+        if (!SaveWorkspacePreferences(_workspacePreferences with { MouseNames = names })) return;
+        _selectedDevice = _selectedDevice with { Name = dialog.ProfileName };
+        if (_connections.Any(connection => connection.Key == key))
+            ApplyConnectionInventory(_connections);
+        DetailHeading.Text = _selectedDevice.Name;
+        System.Windows.Automation.AutomationProperties.SetName(MappingPage, "Assignments for " + DetailHeading.Text);
+        StatusText.Text = "Mouse name updated.";
     }
     private void AppearanceNav_Click(object sender, RoutedEventArgs e) => ShowPage("appearance");
     private void Quit_Click(object sender, RoutedEventArgs e) => ExitApp();

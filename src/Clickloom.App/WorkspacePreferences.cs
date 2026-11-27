@@ -5,6 +5,8 @@ namespace Clickloom.App;
 
 internal sealed record WorkspacePreferences(bool SidebarCollapsed = false, double InspectorWidth = 420)
 {
+    public Dictionary<string, string>? MouseNames { get; init; }
+
     public static WorkspacePreferences Load(string folder)
     {
         try

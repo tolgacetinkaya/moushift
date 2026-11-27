@@ -201,7 +201,10 @@
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <StackPanel Margin="4,0,4,17">
                 <Button x:Name="DetailBackButton" Content="‹  All mice" Click="BackToGallery_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
-                <TextBlock x:Name="DetailHeading" FontSize="35" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Content="Rename mouse" Click="RenameMouse_Click" Style="{StaticResource Quiet}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                  <TextBlock x:Name="DetailHeading" FontSize="35" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                </DockPanel>
                 <ContentControl x:Name="DetailBatteryInfo" Visibility="{Binding Content.BatteryVisibility, RelativeSource={RelativeSource Self}}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Left" Margin="0,9,0,0"/>
               </StackPanel>
               <Border Grid.Row="1" Background="{DynamicResource DashboardStage}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="12" Padding="24,14">

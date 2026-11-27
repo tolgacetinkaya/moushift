@@ -605,7 +605,7 @@ public partial class MainWindow : Window
             }
             _service.SetEnabled(!_service.IsEnabled);
             StatusText.Text = _service.IsEnabled
-                ? _service.DriverlessCircleMode ? "Click Circle and Task View enabled for each mouse. Assigned middle clicks are replaced."
+                ? _service.DriverlessCircleMode ? "Click Circle and Task View are enabled. Try the assigned mouse button in another app."
                     : "Assignments enabled · Your saved actions are active."
                 : "Assignments paused · Normal mouse behavior.";
             UpdateEngineState();

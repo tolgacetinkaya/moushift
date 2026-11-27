@@ -425,6 +425,11 @@ static void ConnectionGrouping()
     if (!receiver.IsReceiver || !receiver.Status.Contains("receiver connected") || !receiver.Status.Contains("unconfirmed") || devices[^1].Key != "virtual"
         || devices.Single(d => d.Key == "corsair").IsReceiver)
         throw new Exception("Receiver presence was confused with mouse power or a physical input.");
+    Require(receiver.Name == "Razer Mouse Dock Pro" && receiver.DisplayName == "Razer mouse"
+        && (receiver with { Name = "CORSAIR DARK CORE RGB PRO Gaming Dongle", Manufacturer = "Corsair" }).DisplayName == "CORSAIR DARK CORE RGB PRO"
+        && devices.Single(d => d.Key == "corsair").DisplayName == "Corsair mouse"
+        && devices.Single(d => d.Key == "virtual").DisplayName == "Virtual mouse",
+        "Mouse cards should distinguish a receiver from a directly reported mouse.");
     if (MouseConnectionCatalog.Build([], _ => throw new Exception()).Count != 0)
         throw new Exception("An unplugged mouse remained in the inventory.");
 }

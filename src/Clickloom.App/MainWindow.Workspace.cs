@@ -18,12 +18,17 @@ public partial class MainWindow
         ApplyWorkspaceSizing(); SaveWorkspacePreferences();
     }
 
-    private void SaveWorkspacePreferences()
+    private bool SaveWorkspacePreferences(WorkspacePreferences? proposed = null)
     {
-        if (_previewOnly) return;
-        try { _workspacePreferences.Save(Path.GetDirectoryName(_store.FilePath)!); }
+        var workspace = proposed ?? _workspacePreferences;
+        try
+        {
+            if (!_previewOnly) workspace.Save(Path.GetDirectoryName(_store.FilePath)!);
+            _workspacePreferences = workspace;
+            return true;
+        }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { StatusText.Text = "Could not save workspace layout: " + error.Message; }
+        { StatusText.Text = "Could not save workspace preferences: " + error.Message; return false; }
     }
 
     private void InspectorSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
