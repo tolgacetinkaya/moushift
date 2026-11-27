@@ -12,6 +12,7 @@ public sealed partial class RingEditorWindow : Window
 {
     private const string DragFormat = "Clickloom.CirclePlacement";
     private readonly Dictionary<Guid, CircleDocument> _documents = [];
+    private readonly Dictionary<Guid, CirclePreferences> _originalPreferences = [];
     private readonly AppSettings _draft;
     private readonly string _initialSettings;
     private readonly string? _deviceKey;
@@ -75,7 +76,11 @@ public sealed partial class RingEditorWindow : Window
     {
         _draft = settings.DeepClone(); _initialSettings = System.Text.Json.JsonSerializer.Serialize(_draft);
         _profileId = profileId == Guid.Empty ? _draft.Profiles[0].Id : profileId; _deviceKey = Profile.DeviceKey; _service = service;
-        foreach (var profile in DeviceProfiles) _documents[profile.Id] = new(profile.RingSlots);
+        foreach (var profile in DeviceProfiles)
+        {
+            _documents[profile.Id] = new(profile.RingSlots);
+            _originalPreferences[profile.Id] = new(profile.CircleAutoSwitch, profile.ManualCircleProfileId, profile.InheritCircleTrigger);
+        }
         Title = "Click Circle · " + (deviceName ?? Profile.DeviceName ?? "Mouse");
         Width = 1220; Height = 880; MinWidth = 1080; MinHeight = 720;
         Background = B("Bg"); Foreground = B("Ink"); FontFamily = CircleVisuals.TextFont; FontSize = 13;
@@ -131,9 +136,9 @@ public sealed partial class RingEditorWindow : Window
         _search.ToolTip = "Search actions"; System.Windows.Automation.AutomationProperties.SetName(_search, "Search actions");
         _search.TextChanged += (_, _) => { _searchHint.Visibility = _search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; RefreshCatalog(); };
         var searchField = new Grid(); _searchHint.Foreground = B("Muted"); searchField.Children.Add(_search); searchField.Children.Add(_searchHint); libraryHead.Children.Add(searchField);
-        var providers = new UniformGrid { Columns = 2, Margin = new(0, 12, 0, 14) };
-        foreach (string provider in new[] { "System Actions", "Circle Actions" })
-        { var button = new Button { Content = provider, FontSize = 11, Padding = new(8), Margin = new(0, 0, 4, 0) }; _providerButtons[provider] = button; button.Click += (_, _) => { _provider = provider; RefreshCatalog(); }; providers.Children.Add(button); }
+        var providers = new UniformGrid { Columns = 3, Margin = new(0, 12, 0, 14) };
+        foreach (string provider in new[] { "System Actions", "Circle Actions", CustomCircleAction.Provider })
+        { var button = new Button { Content = provider, FontSize = 11, Padding = new(3, 8, 3, 8), Margin = new(0, 0, 4, 0) }; _providerButtons[provider] = button; button.Click += (_, _) => { _provider = provider; RefreshCatalog(); }; providers.Children.Add(button); }
         libraryHead.Children.Add(providers); DockPanel.SetDock(libraryHead, Dock.Top); library.Children.Add(libraryHead);
         library.Children.Add(new ScrollViewer { Content = _catalog, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
         var libraryBorder = new FacetedBorder { Background = B("DashboardCard"), BorderBrush = B("DashboardEdge"), BorderThickness = new(1), CornerRadius = new(7), Child = library }; Grid.SetColumn(libraryBorder, 2); body.Children.Add(libraryBorder); Grid.SetRow(body, 2); root.Children.Add(body);
@@ -153,11 +158,25 @@ public sealed partial class RingEditorWindow : Window
     {
         foreach (var profile in DeviceProfiles.ToArray())
         {
+            var original = _originalPreferences.GetValueOrDefault(profile.Id);
             var existing = target.Profiles.FirstOrDefault(p => p.Id == profile.Id && p.DeviceKey == _deviceKey);
-            if (existing is null) { existing = profile.DeepClone(); target.Profiles.Add(existing); }
-            existing.RingSlots = _documents[profile.Id].Slots.Select(s => s.DeepClone()).ToList();
-            existing.CircleAutoSwitch = profile.CircleAutoSwitch; existing.ManualCircleProfileId = profile.ManualCircleProfileId; existing.InheritCircleTrigger = profile.InheritCircleTrigger;
+            if (existing is null)
+            {
+                if (original is not null) continue;
+                existing = profile.DeepClone();
+                target.Profiles.Add(existing);
+            }
+            var document = _documents[profile.Id];
+            if (original is null || document.IsChanged)
+                existing.RingSlots = document.Slots.Select(s => s.DeepClone()).ToList();
+            if (original is null || original.AutoSwitch != profile.CircleAutoSwitch)
+                existing.CircleAutoSwitch = profile.CircleAutoSwitch;
+            if (original is null || original.ManualProfileId != profile.ManualCircleProfileId)
+                existing.ManualCircleProfileId = profile.ManualCircleProfileId;
+            if (original is null || original.InheritTrigger != profile.InheritCircleTrigger)
+                existing.InheritCircleTrigger = profile.InheritCircleTrigger;
         }
+        ApplyMyActions(target);
     }
     internal void ShowApplicationPicker()
     {
@@ -237,7 +256,8 @@ public sealed partial class RingEditorWindow : Window
         var slot = SelectedPath is not { } selectedPath ? null : RingNavigation.Resolve(Slots, selectedPath);
         _selection.Text = slot?.Name ?? "Select a position"; _edit.IsEnabled = _remove.IsEnabled = slot is not null; _open.Visibility = slot?.Kind == RingSlotKind.Folder ? Visibility.Visible : Visibility.Collapsed;
         bool folderContext = _selected is null && _folder.Count > 0;
-        _edit.Content = folderContext ? "Folder settings" : "Edit"; _remove.Content = folderContext ? "Delete folder" : "Remove";
+        _edit.Content = folderContext ? "Folder settings" : slot is not null && FindMyAction(slot.DefinitionId) is not null ? "Edit saved action" : "Edit";
+        _remove.Content = folderContext ? "Delete folder" : "Remove";
         if (folderContext) _open.Visibility = Visibility.Collapsed;
         _addShortcut.Visibility = _folder.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _addShortcut.IsEnabled = _folder.Count > 0 && RingNavigation.Resolve(Slots, _folder)!.Children.Count < 9;
@@ -349,8 +369,25 @@ public sealed partial class RingEditorWindow : Window
     private void EditSelected()
     {
         if (SelectedPath is not { } selected || RingNavigation.Resolve(Slots, selected) is not { } slot) return;
+        if (FindMyAction(slot.DefinitionId) is { } saved)
+        {
+            EditMyAction(saved, saved.Slot);
+            return;
+        }
         var form = new CircleActionWindow(slot, _service, DeviceProfiles) { Owner = DialogOwner }; if (form.ShowDialog() != true) return;
-        var path = selected.ToArray(); bool ok = Document.Change(root => { var value = RingNavigation.Resolve(root, path)!; var replacement = form.Result; value.Name = replacement.Name; value.Icon = replacement.Icon; value.Action = replacement.Action.DeepClone(); value.IncreaseAction = replacement.IncreaseAction.DeepClone(); value.DecreaseAction = replacement.DecreaseAction.DeepClone(); }, out string error);
+        var path = selected.ToArray();
+        bool ok = Document.Change(root =>
+        {
+            var value = RingNavigation.Resolve(root, path)!;
+            var replacement = form.Result;
+            value.Name = replacement.Name;
+            value.Icon = replacement.Icon;
+            value.Action = replacement.Action.DeepClone();
+            value.IncreaseAction = replacement.IncreaseAction.DeepClone();
+            value.DecreaseAction = replacement.DecreaseAction.DeepClone();
+            value.Sequence = replacement.Sequence?.Select(step => step.DeepClone()).ToList();
+            if (CustomCircleAction.IsReference(value.DefinitionId)) value.DefinitionId = "";
+        }, out string error);
         Refresh(); if (!ok) SetStatus(error, true);
     }
     private void RemoveSelected() { if (SelectedPath is not { } path || !ConfirmRemoval(RingNavigation.Resolve(Slots, path))) return; bool ok = Document.Remove(path, out string error); _selected = null; Refresh(); if (!ok) SetStatus(error, true); }
@@ -358,7 +395,9 @@ public sealed partial class RingEditorWindow : Window
     {
         _catalog.Children.Clear(); string query = _search.Text.Trim();
         foreach (var (name, button) in _providerButtons) { button.Background = B(_provider == name ? "RingSelection" : "Bg"); button.BorderBrush = B(_provider == name ? "Accent" : "Line"); }
-        var actions = CircleCatalog.Actions.Where(a => (query.Length > 0 || a.Provider == _provider) && (query.Length == 0 || (a.Title + " " + a.Category + " " + a.Provider).Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray();
+        if (_provider == CustomCircleAction.Provider) AddMyActionControls();
+        var actions = CircleCatalog.Actions.Concat((_draft.MyActions ?? []).Select(action => action.Definition()))
+            .Where(a => (query.Length > 0 || a.Provider == _provider) && (query.Length == 0 || (a.Title + " " + a.Category + " " + a.Provider).Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray();
         foreach (var category in actions.GroupBy(a => (a.Provider, a.Category)))
         {
             var list = new StackPanel();
@@ -369,14 +408,17 @@ public sealed partial class RingEditorWindow : Window
                 var content = new DockPanel(); content.Children.Add(icon);
                 var title = Text(definition.Title, 12.5); title.TextTrimming = TextTrimming.CharacterEllipsis; content.Children.Add(title);
                 var row = new FacetedBorder { Child = content, Background = B("PanelLight"), BorderBrush = B("ControlEdge"), BorderThickness = new(1), Padding = new(14, 10, 14, 10), Margin = new(0, 3, 0, 3), Cursor = Cursors.Hand, ToolTip = "Drag to a position, or double-click to add" };
-                WireDrag(row, new PlacementDrag(_profileId, definition, null)); row.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2) { if (_selected is not null) PlaceDefinition(definition, _selected, false); else if (_folder.Count > 0) PlaceDefinition(definition, _folder.Append(RingNavigation.Resolve(Slots, _folder)!.Children.Count).ToArray(), true); else SetStatus("Select a position first.", true); e.Handled = true; } }; list.Children.Add(row);
+                WireDrag(row, new PlacementDrag(_profileId, definition, null)); row.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2) { if (_selected is not null) PlaceDefinition(definition, _selected, false); else if (_folder.Count > 0) PlaceDefinition(definition, _folder.Append(RingNavigation.Resolve(Slots, _folder)!.Children.Count).ToArray(), true); else SetStatus("Select a position first.", true); e.Handled = true; } };
+                list.Children.Add(FindMyAction(definition.Id) is { } saved ? MyActionRow(row, saved) : row);
             }
-            _catalog.Children.Add(new Expander { Header = category.Key.Category, Content = list, IsExpanded = query.Length > 0, Foreground = B("Muted"), Margin = new(0, 4, 0, 10), Padding = new(0, 6, 0, 0) });
+            _catalog.Children.Add(new Expander { Header = category.Key.Category, Content = list, IsExpanded = query.Length > 0 || category.Key.Provider == CustomCircleAction.Provider, Foreground = B("Muted"), Margin = new(0, 4, 0, 10), Padding = new(0, 6, 0, 0) });
         }
-        if (actions.Length == 0) _catalog.Children.Add(Text("No matching actions", 13, "Muted"));
+        if (actions.Length == 0 && (_provider != CustomCircleAction.Provider || query.Length > 0))
+            _catalog.Children.Add(Text("No matching actions", 13, "Muted"));
     }
     private void SetStatus(string text, bool error = false) { _status.Text = text; _status.Foreground = B(error ? "Danger" : "Muted"); }
     private sealed record PlacementDrag(Guid ProfileId, CircleActionDefinition? Definition, int[]? Source);
+    private sealed record CirclePreferences(bool? AutoSwitch, Guid? ManualProfileId, bool InheritTrigger);
     private sealed record ProfileChoice(Guid Id, string Name) { public override string ToString() => Name; }
     internal void VerifyEditing()
     {

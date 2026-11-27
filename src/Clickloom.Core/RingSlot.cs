@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Clickloom.Core;
 
 public enum RingSlotKind { Command, Folder, Adjustment }
@@ -11,11 +13,15 @@ public sealed class RingSlot
     public InputAction Action { get; set; } = new() { Kind = ActionKind.Disabled };
     public InputAction DecreaseAction { get; set; } = new() { Kind = ActionKind.Disabled };
     public InputAction IncreaseAction { get; set; } = new() { Kind = ActionKind.Disabled };
+    // Older builds see the disabled fallback for a shortcut sequence.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<InputAction>? Sequence { get; set; }
     public List<RingSlot> Children { get; set; } = [];
     public RingSlot DeepClone() => new()
     {
         Name = Name, Kind = Kind, DefinitionId = DefinitionId, Icon = Icon, Action = Action.DeepClone(),
         DecreaseAction = DecreaseAction.DeepClone(), IncreaseAction = IncreaseAction.DeepClone(),
+        Sequence = Sequence?.Select(step => step.DeepClone()).ToList(),
         Children = Children.Select(child => child.DeepClone()).ToList()
     };
 }

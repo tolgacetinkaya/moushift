@@ -11,7 +11,8 @@ public sealed partial class MouseRemappingService : IDisposable
 {
     private sealed record RoutingSnapshot(string Name, Dictionary<MouseControl, InputAction> Actions, Dictionary<int, InputAction> AuxiliaryKeys, bool OwnWindow, long Generation, nint ForegroundWindow)
     { public MappingProfile? Profile { get; init; } public string? ApplicationPath { get; init; } }
-    private sealed record Work(InputAction Action, bool IsRelease, bool IsHold, long Token, long Epoch, long RoutingGeneration, nint ForegroundWindow, MappingProfile? Profile = null, bool DriverlessCircle = false);
+    private sealed record Work(InputAction Action, bool IsRelease, bool IsHold, long Token, long Epoch, long RoutingGeneration, nint ForegroundWindow, MappingProfile? Profile = null, bool DriverlessCircle = false,
+        IReadOnlyList<InputAction>? Sequence = null);
     private readonly ConcurrentQueue<Work> _queue = new();
     private readonly ConcurrentQueue<MouseControl> _observations = new();
     private readonly ConcurrentQueue<int> _auxiliaryObservations = new();
@@ -165,6 +166,10 @@ public sealed partial class MouseRemappingService : IDisposable
             NotifyRingDismissed();
         }
         else if (!IsCurrentRing(request.Id)) return false;
+        var sequence = close ? RingNavigation.Resolve(request.Slots, invocation.Path)?.Sequence : null;
+        if (sequence is not null)
+            return Enqueue(new(action.DeepClone(), false, false, Interlocked.Increment(ref _token), stamp.EnableEpoch,
+                stamp.RoutingGeneration, request.TargetWindow, Sequence: sequence.Select(step => step.DeepClone()).ToArray()));
         if (action.Kind is ActionKind.Ring or ActionKind.Passthrough or ActionKind.Disabled) return true;
         if (action.Kind is ActionKind.SelectCircleProfile or ActionKind.ToggleCircleAdapt)
         {
@@ -734,6 +739,12 @@ public sealed partial class MouseRemappingService : IDisposable
 
     private void Execute(Work work)
     {
+        if (work.Sequence is { } sequence)
+        {
+            ExecuteSequence(work, sequence);
+            return;
+        }
+
         var action = work.Action;
         switch (action.Kind)
         {
@@ -825,6 +836,27 @@ public sealed partial class MouseRemappingService : IDisposable
         }
         foreach (var token in _heldOutputs.Where(item => !_outputOwners.ContainsKey(item.Value)).Select(item => item.Key).ToArray()) _heldOutputs.Remove(token);
         if (cleanupFailed && reportError) { _enabled = false; RaiseStateChanged(); }
+    }
+
+    private void ExecuteSequence(Work work, IReadOnlyList<InputAction> steps)
+    {
+        if (steps.Count is < CustomCircleAction.MinimumSteps or > CustomCircleAction.MaximumSteps
+            || steps.Any(step => step.Kind != ActionKind.Shortcut)) return;
+
+        var stamp = new DispatchStamp(work.Epoch, work.RoutingGeneration);
+        for (int index = 0; index < steps.Count; index++)
+        {
+            if (_stopping || !InputDispatchState.CanExecute(stamp, _dispatchState.Current, _enabled, isRelease: false)
+                || NativeMethods.GetForegroundWindow() != work.ForegroundWindow)
+            {
+                Volatile.Write(ref _inputStatus, "Shortcut sequence stopped because its target or profile changed.");
+                return;
+            }
+            SendShortcut(steps[index]);
+            // Let Windows process the prior shortcut before checking its target for the next step.
+            if (index < steps.Count - 1) Thread.Sleep(40);
+        }
+        Volatile.Write(ref _inputStatus, "Shortcut sequence sent to Windows.");
     }
 
     private void SendShortcut(InputAction action)

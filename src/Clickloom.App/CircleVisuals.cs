@@ -74,5 +74,6 @@ internal static class CircleVisuals
             _ => slot.Action.KeyCode switch { 0x43 => "\uE8C8", 0x56 => "\uE77F", 0x5A => UndoIcon, 0x59 => RedoIcon, 0x09 => "\uE8C4", 0xB3 => "\uE768", 0xAD => "\uE74F", _ => "\uE765" }
         };
     }
-    public static bool Empty(RingSlot slot) => slot.Kind == RingSlotKind.Command && slot.Action.Kind is ActionKind.Disabled or ActionKind.Passthrough;
+    public static bool Empty(RingSlot slot) => slot.Kind == RingSlotKind.Command && slot.Sequence is null
+        && slot.Action.Kind is ActionKind.Disabled or ActionKind.Passthrough;
 }

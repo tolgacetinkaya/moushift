@@ -115,12 +115,15 @@ public sealed class AppSettings
     public bool AutoSwitchProfiles { get; set; } = true;
     public bool StartMinimized { get; set; }
     public List<LearnedControl> LearnedControls { get; set; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<CustomCircleAction>? MyActions { get; set; }
 
     public AppSettings DeepClone() => new()
     {
         SchemaVersion = SchemaVersion, ActiveProfileId = ActiveProfileId,
         AutoSwitchProfiles = AutoSwitchProfiles, StartMinimized = StartMinimized,
         LearnedControls = LearnedControls.Select(c => c.DeepClone()).ToList(),
+        MyActions = MyActions?.Select(action => action.DeepClone()).ToList(),
         Profiles = Profiles.Select(profile => profile.DeepClone()).ToList()
     };
 
