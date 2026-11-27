@@ -20,6 +20,7 @@ public sealed partial class MouseRemappingService
         {
             bool wasCapturing = _middleGate.Capturing;
             _middleGate.Request(requested, down);
+            if (!requested) ClearDirectionalCircles();
             if (!wasCapturing && _middleGate.Capturing)
             { _rawMiddleDowns = 0; _hookMiddleDowns = 0; _rawMiddleArrived.Reset(); }
         }
@@ -27,7 +28,11 @@ public sealed partial class MouseRemappingService
 
     private void ResetMiddleGate()
     {
-        lock (_middleGateLock) _middleGate.Reset();
+        lock (_middleGateLock)
+        {
+            _middleGate.Reset();
+            ClearDirectionalCircles();
+        }
         Interlocked.Exchange(ref _middleReplayReset, 1);
         _wake.Set();
     }

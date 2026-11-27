@@ -77,7 +77,11 @@ public sealed partial class MouseRemappingService : IDisposable
         lock (_settingsGate) rawChanged = _rawCircles.Update(connections);
         var paths = connections.SelectMany(c => c.DevicePaths).ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool releaseMiddle;
-        lock (_middleGateLock) releaseMiddle = _middleGate.RemoveSources(paths);
+        lock (_middleGateLock)
+        {
+            releaseMiddle = _middleGate.RemoveSources(paths);
+            if (rawChanged) ClearDirectionalCircles();
+        }
         if (releaseMiddle) QueueMiddleReplay(false, 0);
         var next = DeviceRouteTable.Build(DeviceSources, connections);
         var previous = Volatile.Read(ref _deviceRoutes);

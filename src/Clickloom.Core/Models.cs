@@ -69,6 +69,14 @@ public sealed class AuxiliaryKeyBinding
     public AuxiliaryKeyBinding DeepClone() => new() { VirtualKey = VirtualKey, Action = Action.DeepClone() };
 }
 
+public sealed record DirectionalShortcut(int KeyCode, KeyModifiers Modifiers)
+{
+    public InputAction ToAction() => new() { Kind = ActionKind.Shortcut, KeyCode = KeyCode, Modifiers = Modifiers };
+}
+
+public sealed record DirectionalCircleSettings(DirectionalShortcut? Left, DirectionalShortcut? Right,
+    DirectionalShortcut? Up, DirectionalShortcut? Down);
+
 public sealed class MappingProfile
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -79,6 +87,8 @@ public sealed class MappingProfile
     public bool? AutoSwitchApplications { get; set; }
     public bool? CircleAutoSwitch { get; set; }
     public Guid? ManualCircleProfileId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DirectionalCircleSettings? DirectionalCircle { get; set; }
     public bool InheritCircleTrigger { get; set; } = true;
     public List<RingSlot> RingSlots { get; set; } = RingDefaults.Create();
     public List<ButtonBinding> Bindings { get; set; } = [];
@@ -89,6 +99,7 @@ public sealed class MappingProfile
     {
         Id = Id, Name = Name, ApplicationPath = ApplicationPath, DeviceKey = DeviceKey, DeviceName = DeviceName, AutoSwitchApplications = AutoSwitchApplications,
         CircleAutoSwitch = CircleAutoSwitch, ManualCircleProfileId = ManualCircleProfileId, InheritCircleTrigger = InheritCircleTrigger,
+        DirectionalCircle = DirectionalCircle,
         RingSlots = RingSlots.Select(slot => slot.DeepClone()).ToList(),
         Bindings = Bindings.Select(binding => binding.DeepClone()).ToList(),
         AuxiliaryKeys = AuxiliaryKeys.Select(binding => binding.DeepClone()).ToList(),

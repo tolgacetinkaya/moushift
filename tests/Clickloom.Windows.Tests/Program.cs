@@ -166,7 +166,8 @@ static void MiddleGateIsolation()
     Require(gate.Raw("b", true, false) == new MiddleGateResult(false, true), "Other mouse lost native down.");
     Require(gate.Hook(true), "Replayed native down also passed through physically.");
     Require(gate.Raw("A", true, true) == default, "Repeated source down fired twice.");
-    Require(gate.Raw("a", false, false) == default && gate.Hook(false), "Circle release leaked or released another mouse.");
+    Require(gate.Raw("a", false, false) is { ReleasedCircle: true, Circle: false, NativePressed: null } && gate.Hook(false),
+        "Circle release leaked or released another mouse.");
     Require(gate.Raw("b", false, true) == new MiddleGateResult(false, false) && gate.Hook(false), "Native cycle changed with profile edits.");
     Require(gate.Raw("a", true, false).NativePressed == true && gate.Hook(true), "Changed assignment did not restore native input.");
     Require(gate.Raw("a", false, false).NativePressed == false && gate.Hook(false), "Restored native release lost.");

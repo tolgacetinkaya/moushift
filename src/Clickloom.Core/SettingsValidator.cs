@@ -56,6 +56,14 @@ public static class SettingsValidator
             }
             if (profile.RingSlots is null || profile.RingSlots.Count != 8) errors.Add("Action Ring must contain eight segments.");
             else ValidateRing(profile.RingSlots, 0, new HashSet<RingSlot>(ReferenceEqualityComparer.Instance), errors);
+            if (profile.DirectionalCircle is { } directions)
+            {
+                if (profile.DeviceKey is null) errors.Add("Quick gestures require a device profile.");
+                if (directions is { Left: null, Right: null, Up: null, Down: null })
+                    errors.Add("Quick gestures require at least one shortcut.");
+                foreach (var shortcut in new[] { directions.Left, directions.Right, directions.Up, directions.Down })
+                    if (shortcut is not null) ValidateAction(shortcut.ToAction(), errors);
+            }
             if (profile.Bindings is null) { errors.Add("Profile bindings cannot be null."); continue; }
             if (profile.LearnedBindings is null || profile.LearnedBindings.Count > 256) errors.Add("Invalid learned assignments.");
             else

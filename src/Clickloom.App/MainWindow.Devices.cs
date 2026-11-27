@@ -25,6 +25,7 @@ public partial class MainWindow
             _deviceActivity.WheelObserved += (_, input) => ObserveInputTest(
                 new(input.DevicePath, input.Delta > 0 ? Clickloom.Core.MouseControl.WheelRight : Clickloom.Core.MouseControl.WheelLeft, true));
             _deviceActivity.VerticalWheelObserved += (_, input) => ObserveInputTest(input);
+            _deviceActivity.MotionObserved += (_, input) => _service?.ObserveRawMouseMotion(input);
             _service?.SetRawInputAvailable(true);
             _deviceActivity.Observed += (_, path) =>
             {

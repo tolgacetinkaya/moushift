@@ -60,3 +60,4 @@ internal sealed class RawCircleRouter
 
 public sealed record RawMouseButtonEvent(string DevicePath, MouseControl Control, bool Pressed);
 public sealed record RawMouseWheelEvent(string DevicePath, short Delta);
+public readonly record struct RawMouseMotionEvent(string DevicePath, int X, int Y);

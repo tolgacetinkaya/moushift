@@ -32,7 +32,9 @@ public static class ProfileResolver
         if (mapping is null) return null;
         var effective = mapping.DeepClone();
         effective.Bindings = Enum.GetValues<MouseControl>().Select(c => new ButtonBinding { Input = c, Action = ResolveDeviceBinding(settings, mapping, c).DeepClone() }).ToList();
-        effective.RingSlots = (ResolveCircle(settings, executable, deviceKey) ?? mapping).RingSlots.Select(s => s.DeepClone()).ToList();
+        var circle = ResolveCircle(settings, executable, deviceKey) ?? mapping;
+        effective.RingSlots = circle.RingSlots.Select(s => s.DeepClone()).ToList();
+        effective.DirectionalCircle = circle.DirectionalCircle;
         return effective;
     }
     public static MappingProfile? ResolveDeviceOnly(AppSettings settings, string? foregroundExecutable, string? deviceKey)

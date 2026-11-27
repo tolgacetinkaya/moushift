@@ -384,6 +384,8 @@
                     </Grid>
                   </Border>
                         </StackPanel>
+                        <Button Content="Quick gestures…" Click="DirectionalCircle_Click"
+                                Style="{StaticResource ContextAction}" HorizontalAlignment="Left" Margin="0,8,0,0"/>
                         <Expander Header="Profile options" Margin="0,8,0,0"><StackPanel Margin="0,10,0,8">
                           <CheckBox x:Name="AutoSwitchCheck" Content="Switch with active app" Checked="AutoSwitch_Changed" Unchecked="AutoSwitch_Changed" FontSize="12" Margin="0,0,0,15"/>
                           <Button x:Name="ImportPreviousButton" Content="Import previous assignments…" Click="ImportPrevious_Click" Style="{StaticResource Quiet}" FontSize="12"/>

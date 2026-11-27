@@ -43,7 +43,7 @@ internal sealed class DriverlessMiddleGate
         if (!_held.Remove(path, out var released)) return default;
         bool releaseNative = released == Route.Native && !_held.Values.Contains(Route.Native);
         Drain();
-        return new(false, releaseNative ? false : null);
+        return new(false, releaseNative ? false : null) { ReleasedCircle = released == Route.Circle };
     }
 
     // Removal cannot leave a synthetic middle button held indefinitely.
@@ -65,4 +65,7 @@ internal sealed class DriverlessMiddleGate
         if (!_requested && _held.Count == 0 && _hookHeld == 0) Capturing = false;
     }
 }
-internal readonly record struct MiddleGateResult(bool Circle, bool? NativePressed);
+internal readonly record struct MiddleGateResult(bool Circle, bool? NativePressed)
+{
+    public bool ReleasedCircle { get; init; }
+}
