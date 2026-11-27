@@ -15,13 +15,28 @@ public sealed record ApplicationCatalogResult(IReadOnlyList<ApplicationEntry> Ap
 /// <summary>Read-only Windows application discovery. No shell commands, launches or disk-wide scans.</summary>
 public static class ApplicationCatalog
 {
+    private static readonly Lock ScanGate = new();
+    private static readonly TimeSpan ScanTimeout = TimeSpan.FromSeconds(12);
+    private static Task<ApplicationCatalogResult>? _activeScan;
+
     public static Task<ApplicationCatalogResult> ScanAsync(CancellationToken cancellation = default)
+    {
+        lock (ScanGate)
+        {
+            // Cancel the UI wait without spawning additional STA threads if Windows is still in COM.
+            if (_activeScan is null || _activeScan.IsCompleted) _activeScan = StartScan();
+            return _activeScan.WaitAsync(ScanTimeout, cancellation);
+        }
+    }
+
+    private static Task<ApplicationCatalogResult> StartScan()
     {
         var completion = new TaskCompletionSource<ApplicationCatalogResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
-            try { completion.TrySetResult(Scan(cancellation)); }
-            catch (OperationCanceledException) { completion.TrySetCanceled(cancellation); }
+            using var deadline = new CancellationTokenSource(ScanTimeout);
+            try { completion.TrySetResult(Scan(deadline.Token)); }
+            catch (OperationCanceledException) { completion.TrySetException(new TimeoutException("Windows application discovery timed out.")); }
             catch (Exception error) { completion.TrySetException(error); }
         }) { IsBackground = true, Name = "Moushift application catalog" };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
@@ -45,10 +60,10 @@ public static class ApplicationCatalog
                 {
                     item = ((dynamic)items).Item(i);
                     string name = ((dynamic)item!).Name;
-                    string? path = NormalizeExecutable(Property(item!, "System.Link.TargetParsingPath"));
+                    string? path = NormalizeDiscoveredExecutable(Property(item!, "System.Link.TargetParsingPath"));
                     string? appId = Property(item!, "System.AppUserModel.ID");
                     path ??= PackageApplicationPath.Resolve(appId);
-                    path ??= NormalizeExecutable((string?)((dynamic)item!).Path);
+                    path ??= NormalizeDiscoveredExecutable((string?)((dynamic)item!).Path);
                     if (!string.IsNullOrWhiteSpace(name)) entries.Add(new(name, path, appId?.Contains('!') == true ? "Windows app" : "Installed app"));
                 }
                 catch (Exception e) when (Recoverable(e)) { partial = true; }
@@ -73,7 +88,7 @@ public static class ApplicationCatalog
                     try
                     {
                         using var app = paths!.OpenSubKey(key);
-                        if (NormalizeExecutable(app?.GetValue(null) as string) is { } path)
+                        if (NormalizeDiscoveredExecutable(app?.GetValue(null) as string) is { } path)
                         {
                             string name = FileVersionInfo.GetVersionInfo(path).ProductName ?? Path.GetFileNameWithoutExtension(path);
                             entries.Add(new(name, path, "Registered app"));
@@ -94,7 +109,7 @@ public static class ApplicationCatalog
                 try
                 {
                     if (process.MainWindowHandle == 0 || process.Id == Environment.ProcessId) continue;
-                    if (NormalizeExecutable(process.MainModule?.FileName) is { } path)
+                    if (NormalizeDiscoveredExecutable(process.MainModule?.FileName) is { } path)
                         entries.Add(new(FileVersionInfo.GetVersionInfo(path).ProductName ?? Path.GetFileNameWithoutExtension(path), path, "Running app"));
                 }
                 catch (Exception e) when (Recoverable(e)) { /* Protected/exiting processes are not enumerable. */ }
@@ -109,18 +124,27 @@ public static class ApplicationCatalog
         .GroupBy(e => e.ExecutablePath ?? "unresolved:" + e.Name, StringComparer.OrdinalIgnoreCase)
         .Select(g => g.First()).OrderBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
 
-    public static string? NormalizeExecutable(string? value)
+    public static string? NormalizeExecutable(string? value) => NormalizeExecutable(value, localOnly: false);
+
+    internal static string? NormalizeDiscoveredExecutable(string? value) => NormalizeExecutable(value, localOnly: true);
+
+    private static string? NormalizeExecutable(string? value, bool localOnly)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         try
         {
             string path = Environment.ExpandEnvironmentVariables(value.Trim().Trim('"'));
             // A command line, URL or shell ID is not an executable identity.
-            return Path.IsPathFullyQualified(path) && path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(path)
-                ? Path.GetFullPath(path) : null;
+            if (!Path.IsPathFullyQualified(path) || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return null;
+            var fullPath = Path.GetFullPath(path);
+            return (!localOnly || IsLocalDiscoveryPath(fullPath)) && File.Exists(fullPath) ? fullPath : null;
         }
         catch (Exception error) when (Recoverable(error)) { return null; }
     }
+
+    internal static bool IsLocalDiscoveryPath(string path) =>
+        Path.GetPathRoot(path) is { Length: 3 } root && char.IsAsciiLetter(root[0]) && root[1] == ':'
+        && new DriveInfo(root).DriveType is DriveType.Fixed or DriveType.Removable or DriveType.CDRom or DriveType.Ram;
 
     private static string? Property(object item, string name)
     { try { return ((dynamic)item).ExtendedProperty(name) as string; } catch (Exception e) when (Recoverable(e)) { return null; } }

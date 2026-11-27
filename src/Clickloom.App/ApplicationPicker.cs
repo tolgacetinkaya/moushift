@@ -76,11 +76,12 @@ internal sealed class ApplicationPicker : Grid, IDisposable
         _refresh.IsEnabled = false; _status.Text = "Finding your apps… You can search or browse while this loads.";
         try
         {
-            var result = _fixture is null ? await ApplicationCatalog.ScanAsync(token).WaitAsync(token) : new ApplicationCatalogResult(_fixture, false);
+            var result = _fixture is null ? await ApplicationCatalog.ScanAsync(token) : new ApplicationCatalogResult(_fixture, false);
             if (_disposed || token.IsCancellationRequested) return;
             _apps = result.Applications; _partial = result.Partial; Filter();
         }
         catch (OperationCanceledException) { }
+        catch (TimeoutException) { if (!_disposed) _status.Text = "Windows app discovery timed out. Browse for an app or try Refresh list."; }
         catch (Exception) { if (!_disposed) _status.Text = "Couldn't read the app list. Try Refresh list or Browse for an app."; }
         finally { if (!_disposed && !token.IsCancellationRequested) _refresh.IsEnabled = true; }
     }

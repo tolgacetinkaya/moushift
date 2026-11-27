@@ -658,6 +658,7 @@ public sealed partial class MouseRemappingService : IDisposable
     private void WorkerLoop()
     {
         var epoch = _dispatchState.Current.EnableEpoch;
+        long nextCleanupAttempt = 0;
         try
         {
             while (!_stopping)
@@ -670,7 +671,18 @@ public sealed partial class MouseRemappingService : IDisposable
                     try { ShortcutCaptured?.Invoke(this, captured); } catch { }
                 }
                 var currentEpoch = _dispatchState.Current.EnableEpoch;
-                if (epoch != currentEpoch) { ReleaseHeldOutputs(); epoch = currentEpoch; }
+                if (epoch != currentEpoch)
+                {
+                    ReleaseHeldOutputs();
+                    epoch = currentEpoch;
+                    nextCleanupAttempt = Environment.TickCount64 + 500;
+                }
+                else if (!_enabled && (_pendingOneShotInputs.Count != 0 || _outputOwners.Count != 0)
+                    && Environment.TickCount64 >= nextCleanupAttempt)
+                {
+                    ReleaseHeldOutputs(reportError: false);
+                    nextCleanupAttempt = Environment.TickCount64 + 500;
+                }
                 for (int count = 0; count < 32 && !_stopping && _observations.TryDequeue(out var observed); count++)
                 {
                     Interlocked.Decrement(ref _observationCount);
@@ -781,15 +793,18 @@ public sealed partial class MouseRemappingService : IDisposable
         _heldOutputs.Remove(token);
     }
 
-    private void ReleaseHeldOutputs()
+    private void ReleaseHeldOutputs(bool reportError = true)
     {
         var cleanupFailed = false;
         var cleanupError = TryReleaseOneShotInputs();
         if (cleanupError is not null)
         {
             cleanupFailed = true;
-            _lastError = (_lastError is null ? "" : _lastError + " ") + cleanupError;
-            try { ActionError?.Invoke(this, _lastError); } catch { }
+            if (reportError)
+            {
+                _lastError = cleanupError;
+                try { ActionError?.Invoke(this, _lastError); } catch { }
+            }
         }
         foreach (var output in _outputOwners.Keys.ToArray())
         {
@@ -797,12 +812,15 @@ public sealed partial class MouseRemappingService : IDisposable
             catch (Exception exception)
             {
                 cleanupFailed = true;
-                _lastError = "An output release failed: " + exception.Message;
-                try { ActionError?.Invoke(this, _lastError); } catch { }
+                if (reportError)
+                {
+                    _lastError = "An output release failed: " + exception.Message;
+                    try { ActionError?.Invoke(this, _lastError); } catch { }
+                }
             }
         }
         foreach (var token in _heldOutputs.Where(item => !_outputOwners.ContainsKey(item.Value)).Select(item => item.Key).ToArray()) _heldOutputs.Remove(token);
-        if (cleanupFailed) { _enabled = false; RaiseStateChanged(); }
+        if (cleanupFailed && reportError) { _enabled = false; RaiseStateChanged(); }
     }
 
     private void SendShortcut(InputAction action)
