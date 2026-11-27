@@ -92,6 +92,7 @@ public sealed class MappingProfile
     public bool InheritCircleTrigger { get; set; } = true;
     public List<RingSlot> RingSlots { get; set; } = RingDefaults.Create();
     public List<ButtonBinding> Bindings { get; set; } = [];
+    // Preserve retired F13–F24 assignments when opening and saving older profiles.
     public List<AuxiliaryKeyBinding> AuxiliaryKeys { get; set; } = [];
     public List<LearnedBinding> LearnedBindings { get; set; } = [];
 

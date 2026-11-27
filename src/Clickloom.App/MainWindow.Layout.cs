@@ -8,8 +8,8 @@ public partial class MainWindow
     internal void EnterInteractivePreview()
     {
         EngineBadge.Text = "Preview · hardware control off";
-        EnableButton.Content = "Enable Circle";
-        EnableButton.IsEnabled = false;
+        MouseActionsSwitch.IsChecked = false;
+        MouseActionsSwitch.IsEnabled = false;
         StatusText.Text = "Preview · edits save in the preview only";
     }
     private bool _layoutEventsBound;
@@ -105,8 +105,7 @@ public partial class MainWindow
         }
         a.Activity = "Input detected"; b.Activity = "Last input recently";
         EmptyDevicesBox.Visibility = Visibility.Collapsed;
-        EngineBadge.Text = "Circle enabled"; EnableButton.Content = "Pause";
-        EnableButton.Style = (Style)FindResource(typeof(Button));
+        EngineBadge.Text = "Preview"; MouseActionsSwitch.IsChecked = true;
         ReceiverConnectionsList.ItemsSource = _deviceCards;
         RefreshBindings(MouseControl.MiddleButton); CloseEditor(); ApplyWorkspaceSizing();
     }

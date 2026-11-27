@@ -25,7 +25,7 @@ public sealed partial class MouseRemappingService
     public void ObserveRawMouseMotion(RawMouseMotionEvent input)
     {
         if (!_hasDirectionalHolds) return;
-        lock (_middleGateLock)
+        lock (_buttonGateLock)
         {
             if (!_directionalHolds.TryGetValue(input.DevicePath, out var hold)) return;
             long elapsed = Environment.TickCount64 - hold.Start;
@@ -45,9 +45,9 @@ public sealed partial class MouseRemappingService
 
     private void BeginDirectionalCircle(string path, MappingProfile profile, DispatchStamp stamp, nint foreground, long tick)
     {
-        lock (_middleGateLock)
+        lock (_buttonGateLock)
         {
-            if (!_middleGate.Capturing || !_enabled || stamp != _dispatchState.Current) return;
+            if (!_buttonGates[MouseControl.MiddleButton].Capturing || !_enabled || stamp != _dispatchState.Current) return;
             _directionalHolds[path] = new(profile, stamp, foreground, tick);
             _hasDirectionalHolds = true;
         }
@@ -57,7 +57,7 @@ public sealed partial class MouseRemappingService
         bool ready, DispatchStamp stamp, nint foreground, long tick)
     {
         DirectionalHold? hold;
-        lock (_middleGateLock)
+        lock (_buttonGateLock)
         {
             _directionalHolds.Remove(path, out hold);
             _hasDirectionalHolds = _directionalHolds.Count != 0;
@@ -80,7 +80,7 @@ public sealed partial class MouseRemappingService
         return shortcut is null ? default : (hold.Profile, shortcut.ToAction());
     }
 
-    // Caller holds the middle gate lock.
+    // Caller holds the button gate lock.
     private void ClearDirectionalCircles()
     {
         _directionalHolds.Clear();

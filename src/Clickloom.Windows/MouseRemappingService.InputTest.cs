@@ -20,16 +20,14 @@ public sealed partial class MouseRemappingService
             var profile = ProfileResolver.ResolveDeviceOnly(_settings, snapshot.ApplicationPath, deviceKey);
             var action = profile is null ? new InputAction() : ProfileResolver.ResolveDeviceBinding(_settings, profile, input.Control);
             var circle = action.Kind == ActionKind.Ring ? ProfileResolver.ResolveCircle(_settings, snapshot.ApplicationPath, deviceKey) : null;
-            bool standardButton = input.Control is >= MouseControl.LeftButton and <= MouseControl.XButton2;
-            bool tilt = input.Control is MouseControl.WheelLeft or MouseControl.WheelRight;
-            bool driverless = !HasDeviceRouting && (standardButton && action.IsTaskViewAssignment
-                || (standardButton || tilt) && action.Kind == ActionKind.Ring);
+            bool driverless = !HasDeviceRouting && RawCircleRouter.SupportsAction(input.Control, action);
             var support = action.Kind == ActionKind.Passthrough ? "Windows default input."
                 : CanRouteDevice(deviceKey) ? "This mouse has a verified remapping route."
                 : driverless
                     ? input.Control == MouseControl.MiddleButton
                         ? circle?.DirectionalCircle is not null ? "Tap for Click Circle. Hold and move for a Quick gesture."
                             : "Driverless assignment. This test only observes input."
+                        : RawCircleRouter.ReplacesNative(input.Control, action) ? "This shortcut replaces the native side button when enabled."
                         : "Driverless assignment. Original input is retained when enabled."
                     : "Saved assignment. This input has no active remapping route for it.";
 

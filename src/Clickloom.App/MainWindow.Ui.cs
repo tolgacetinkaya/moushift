@@ -30,7 +30,7 @@ public partial class MainWindow
                 group.OrderBy(profile => profile.ApplicationPath is not null).ThenBy(profile => profile.Name, StringComparer.CurrentCultureIgnoreCase)
                     .Select(profile => new ProfileSummary(profile.Id, profile.Name,
                         profile.ApplicationPath is null ? "All applications" : System.IO.Path.GetFileName(profile.ApplicationPath),
-                        profile.Bindings.Count(binding => binding.Action.Kind != ActionKind.Passthrough) + profile.AuxiliaryKeys.Count)).ToArray()))
+                        profile.Bindings.Count(binding => binding.Action.Kind != ActionKind.Passthrough))).ToArray()))
             .OrderBy(group => group.DeviceName, StringComparer.CurrentCultureIgnoreCase).ToArray();
         ProfileManagerList.ItemsSource = groups;
         EmptyProfiles.Visibility = groups.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -46,8 +46,6 @@ public partial class MainWindow
         _selectedDevice = _deviceCards.FirstOrDefault(card => card.DeviceKey == profile.DeviceKey)
             ?? new(profile.DeviceKey, MouseDisplayName(profile.DeviceKey, profile.DeviceName ?? "Saved mouse"), "PROFILE", "Saved profile", (System.Windows.Media.Brush)FindResource("Accent"), profile.DeviceKey);
         _loading = true; _deviceScope = profile.DeviceKey is not null; DeviceScopeCheck.IsChecked = _deviceScope;
-        ShowAuxiliaryCheck.IsEnabled = !_deviceScope;
-        if (_deviceScope) ShowAuxiliaryCheck.IsChecked = false;
         _loading = false;
         _editingProfileId = profile.Id;
         foreach (var row in _deviceCards) row.IsSelected = row.DeviceKey == profile.DeviceKey;

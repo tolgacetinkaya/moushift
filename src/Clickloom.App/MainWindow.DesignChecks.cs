@@ -115,6 +115,13 @@ public partial class MainWindow
         var folder = Path.Combine(Path.GetDirectoryName(_store.FilePath)!, "layout-fixture");
         _workspacePreferences.Save(folder);
         if (WorkspacePreferences.Load(folder) != _workspacePreferences) throw new InvalidOperationException("Workspace layout did not survive reload.");
+        foreach (bool on in new[] { true, false })
+        {
+            (_workspacePreferences with { MouseActionsEnabled = on }).Save(folder);
+            var restored = WorkspacePreferences.Load(folder);
+            if (restored.MouseActionsEnabled != on || restored.InspectorWidth != 490)
+                throw new InvalidOperationException("Mouse actions or inspector width did not survive reload.");
+        }
         _workspacePreferences = preferences; ApplyWorkspaceSizing();
         ShowButtonPositions(); UpdateLayout(); PlaceMarkers();
         if (DeviceDetailPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Collapsed || DiagramStage.ActualWidth < 300)

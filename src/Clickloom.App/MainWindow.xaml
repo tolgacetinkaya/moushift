@@ -124,7 +124,14 @@
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <TextBlock x:Name="EngineBadge" Text="Paused" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,0,12,0"/>
-            <Button x:Name="EnableButton" Content="Enable Circle" Click="Enable_Click" MinWidth="100" Margin="0,0,8,0" Style="{StaticResource Primary}"/>
+            <CheckBox x:Name="MouseActionsSwitch" AutomationProperties.Name="Mouse actions" Style="{StaticResource Switch}"
+                      Checked="MouseActions_Changed" Unchecked="MouseActions_Changed" Margin="0,0,8,0" MinHeight="36" ToolTip="Use your saved mouse assignments, including Click Circle. Remembers your choice when Moushift restarts.">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="Mouse actions" Foreground="{DynamicResource Ink}"/><TextBlock Margin="6,0,0,0" MinWidth="20">
+                <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="Off"/><Style.Triggers>
+                  <DataTrigger Binding="{Binding IsChecked, ElementName=MouseActionsSwitch}" Value="True"><Setter Property="Text" Value="On"/></DataTrigger>
+                </Style.Triggers></Style></TextBlock.Style>
+              </TextBlock></StackPanel>
+            </CheckBox>
             <Button Click="ToggleTheme_Click" Style="{StaticResource Navigation}" Width="34" Padding="0" HorizontalContentAlignment="Center" ToolTip="Switch light or dark appearance" AutomationProperties.Name="Toggle light and dark theme"><TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE793;" FontSize="16"/></Button>
             <Button Content="&#xE921;" FontFamily="Segoe Fluent Icons" Style="{StaticResource CaptionButton}" Click="Minimize_Click" AutomationProperties.Name="Minimize"/>
             <Button Content="&#xE922;" FontFamily="Segoe Fluent Icons" Style="{StaticResource CaptionButton}" Click="Maximize_Click" AutomationProperties.Name="Maximize or restore"/>
@@ -254,7 +261,6 @@
                       <TextBlock x:Name="ScopeDescription" Style="{StaticResource Caption}" FontSize="12" />
                       <CheckBox x:Name="DeviceScopeCheck" Visibility="Collapsed" Content="Only this device" Checked="DeviceScope_Changed" Unchecked="DeviceScope_Changed" Margin="0,8,0,0" />
                       <TextBlock x:Name="DeviceScopeHint" Style="{StaticResource Caption}" FontSize="11" />
-                      <CheckBox x:Name="ShowAuxiliaryCheck" Visibility="Collapsed" Content="Extra buttons (F13–F24)" Checked="ShowAuxiliary_Changed" Unchecked="ShowAuxiliary_Changed" Margin="0,10,0,0" />
                     </StackPanel>
                   </Expander>
                   </StackPanel>
@@ -318,21 +324,21 @@
                       </Grid.RowDefinitions>
                       <Grid Margin="0,0,0,4">
                         <Grid.ColumnDefinitions>
-                          <ColumnDefinition />
                           <ColumnDefinition Width="Auto" />
+                          <ColumnDefinition />
                         </Grid.ColumnDefinitions>
-                        <StackPanel>
-                          <TextBlock x:Name="SelectedInputTitle" Text="Back button" FontSize="16" FontWeight="SemiBold" />
+                        <Button x:Name="CloseBindingButton" Content="‹  All buttons" Click="CloseEditor_Click" FontSize="12" Padding="12,7" Margin="0,0,10,0" VerticalAlignment="Center" AutomationProperties.Name="Back to all mouse buttons"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock x:Name="SelectedInputTitle" Text="Back button" FontSize="16" FontWeight="SemiBold" TextAlignment="Right" TextWrapping="Wrap" />
                           <TextBlock x:Name="SelectedInputHint" Text="Rear side button" Visibility="Collapsed"/>
                         </StackPanel>
-                        <Button x:Name="CloseBindingButton" Grid.Column="1" Content="‹  All buttons" Click="CloseEditor_Click" FontSize="12" Padding="12,7" Margin="10,0,0,0" VerticalAlignment="Top" AutomationProperties.Name="Back to all mouse buttons"/>
                       </Grid>
                       <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
                         <StackPanel>
                           <TextBlock Text="Action" Style="{StaticResource FieldLabel}" />
                           <ComboBox x:Name="ActionCombo" SelectionChanged="ActionCombo_SelectionChanged" DisplayMemberPath="Name" SelectedValuePath="Kind" AutomationProperties.Name="Assigned action" />
                           <Border x:Name="ActionDescriptionBox" Margin="0,10,0,0" Visibility="Collapsed">
-                            <TextBlock x:Name="ActionDescription" Style="{StaticResource Caption}" />
+                            <TextBlock x:Name="ActionDescription" Style="{StaticResource Caption}" TextWrapping="Wrap" />
                           </Border>
                           <StackPanel x:Name="ShortcutPanel" Visibility="Collapsed" Margin="0,12,0,0">
                             <TextBlock Text="Shortcut" Style="{StaticResource FieldLabel}" FontSize="12" />
@@ -371,7 +377,6 @@
                             <Button Content="Customize Circle" Click="EditRing_Click" Margin="0,16,0,8" />
                             <Button Content="Open preview" Click="PreviewRing_Click" />
                           </StackPanel>
-                          <TextBlock x:Name="AuxiliaryHint" Text="For an extra button configured as F13–F24 in your vendor app." Style="{StaticResource Caption}" Visibility="Collapsed" Margin="0,20,0,0" />
                           <Expander Header="Last input result" Margin="0,22,0,12">
                             <TextBlock x:Name="LastInputResultText" Text="No button detected yet." Style="{StaticResource Caption}" Margin="0,10,0,0" />
                           </Expander>
@@ -476,7 +481,7 @@
             <Border Style="{StaticResource Surface}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Margin="0,0,70,0"><TextBlock Text="Device input support" FontWeight="SemiBold"/><TextBlock Text="Driverless Circle · optional exclusive remapping" Style="{StaticResource Caption}" Margin="0,6,0,0"/></StackPanel><TextBlock x:Name="SetupBackendState" Grid.Column="1" Text="Checking input" Foreground="{DynamicResource Muted}"/></Grid></Border>
             <ItemsControl x:Name="SetupConnectionRows" Margin="0,18,0,20"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="16,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Margin="0,0,30,0"/><TextBlock Text="{Binding Routing}" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="12"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
             <StackPanel Orientation="Horizontal"><Button Content="Setup details" Click="SetupGuide_Click"/><Button Content="Use existing installation…" Click="SelectInputLibrary_Click" Style="{StaticResource Quiet}" Margin="12,0,0,0"/></StackPanel>
-            <Expander x:Name="SetupGuideExpander" Header="How device support works" Margin="0,20,0,0"><TextBlock Text="Assign Click Circle or Task View to a standard mouse button and select Enable Circle. Test the physical button outside Moushift. The middle button runs its assignment in place of a normal middle click. Other standard buttons also keep their normal behavior. Horizontal wheel directions can open Click Circle.&#10;&#10;Other shortcut assignments and vertical wheel triggers need exclusive input support. Custom HID assignments are saved as drafts." Style="{StaticResource Caption}" Margin="4,12,0,0" MaxWidth="680"/></Expander>
+            <Expander x:Name="SetupGuideExpander" Header="How device support works" Margin="0,20,0,0"><TextBlock Text="Apply starts supported assignments for a connected mouse. Turn Mouse actions on or off in the top bar. Moushift remembers your choice. Back and Forward keyboard shortcuts replace normal side clicks. Click Circle and Task View replace the middle click and keep the original click on other buttons. Test in another app. Horizontal wheel directions can open Click Circle.&#10;&#10;Keyboard shortcuts on other buttons and vertical wheel triggers need exclusive input support. Custom HID assignments are saved as drafts." Style="{StaticResource Caption}" Margin="4,12,0,0" MaxWidth="680"/></Expander>
           </StackPanel></ScrollViewer>
           <ScrollViewer x:Name="AppearancePage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="40,32">
             <StackPanel MaxWidth="880" HorizontalAlignment="Left">
@@ -503,7 +508,7 @@
                 <Border Style="{StaticResource Surface}">
                   <StackPanel>
                     <TextBlock Text="Button mapping" FontSize="19" FontWeight="SemiBold" />
-                    <TextBlock Text="1. Open a connection or shared assignments.&#10;2. Select a button on the drawing, or identify it by pressing it.&#10;3. Choose an action and Apply.&#10;4. Enable assignments from the toolbar." Style="{StaticResource Caption}" Margin="0,15,0,0" />
+                    <TextBlock Text="1. Open a connection or shared assignments.&#10;2. Select a button on the drawing, or identify it by pressing it.&#10;3. Choose an action and Apply.&#10;4. Check that Mouse actions is On in the top bar." Style="{StaticResource Caption}" Margin="0,15,0,0" />
                     <Button Content="Edit buttons" Click="SharedMappings_Click" HorizontalAlignment="Left" Margin="0,20,0,0" />
                   </StackPanel>
                 </Border>
@@ -523,7 +528,7 @@
               <Border Style="{StaticResource Surface}" Margin="0,22,0,0">
                 <StackPanel>
                   <TextBlock Text="Devices and profile scope" FontSize="19" FontWeight="SemiBold" />
-                  <TextBlock Text="Each mouse uses its own profile. Driverless mode supports Click Circle and Task View on standard buttons, and Click Circle on horizontal wheel directions. Assigned middle clicks replace the native click. Other triggers retain their normal behavior. A receiver can remain listed while its mouse is off.&#10;&#10;Extra HID assignments are stored as drafts. DPI, lighting, and onboard memory are managed by the vendor app." Style="{StaticResource Caption}" Margin="0,13,0,0" />
+                  <TextBlock Text="Each mouse uses its own profile. Driverless mode supports Click Circle and Task View on standard buttons, keyboard shortcuts on Back and Forward, and Click Circle on horizontal wheel directions. Middle-button actions and Back or Forward keyboard shortcuts replace their native clicks. Other triggers keep their normal behavior. A receiver can remain listed while its mouse is off.&#10;&#10;Extra HID assignments are stored as drafts. DPI, lighting, and onboard memory are managed by the vendor app." Style="{StaticResource Caption}" Margin="0,13,0,0" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource Surface}" Margin="0,22,0,0">
