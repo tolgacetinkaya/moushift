@@ -237,7 +237,6 @@ public partial class MainWindow : Window
                 ShowPage("devices"); _deviceCards.Clear();
                 _deviceCards.Add(new("preview-only", "Razer mouse · sample device", "RAZER", "Design preview only", (Brush)FindResource("Accent")));
                 EmptyDevicesBox.Visibility = Visibility.Collapsed;
-                DevicesSubtitle.Text = "Design preview · Sample connection";
             }
             else if (page?.StartsWith("action-") == true || page == "shortcut-manual")
             {
@@ -750,8 +749,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            DevicesSubtitle.Text = "Could not refresh connections";
-            PresenceDetails.Text = "Device list may be out of date: " + ex.Message;
+            PresenceDetails.Text = "Could not refresh connections. The list may be out of date. " + ex.Message;
         }
         finally { Interlocked.Exchange(ref _presencePolling, 0); }
     }

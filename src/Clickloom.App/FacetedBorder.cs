@@ -4,11 +4,24 @@ using System.Windows.Media;
 
 namespace Clickloom.App;
 
-/// <summary>Uses Border layout with a softly rounded six-sided outline.</summary>
+/// <summary>Uses a softly rounded six-sided outline where the title bar opts in.</summary>
 public sealed class FacetedBorder : Border
 {
+    public static readonly DependencyProperty IsFacetedProperty = DependencyProperty.RegisterAttached(
+        "IsFaceted", typeof(bool), typeof(FacetedBorder),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.Inherits | FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static bool GetIsFaceted(DependencyObject element) => (bool)element.GetValue(IsFacetedProperty);
+    public static void SetIsFaceted(DependencyObject element, bool value) => element.SetValue(IsFacetedProperty, value);
+
     protected override void OnRender(DrawingContext drawing)
     {
+        if (!GetIsFaceted(this))
+        {
+            base.OnRender(drawing);
+            return;
+        }
+
         double stroke = BorderBrush is null ? 0 : BorderThickness.Left;
         if (ActualWidth <= stroke || ActualHeight <= stroke) return;
         double inset = stroke / 2;

@@ -107,7 +107,6 @@ public partial class MainWindow
         EmptyDevicesBox.Visibility = Visibility.Collapsed;
         EngineBadge.Text = "Circle enabled"; EnableButton.Content = "Pause";
         EnableButton.Style = (Style)FindResource(typeof(Button));
-        DevicesSubtitle.Text = "2 Windows mouse connections · 1 receiver";
         ReceiverConnectionsList.ItemsSource = _deviceCards;
         RefreshBindings(MouseControl.MiddleButton); CloseEditor(); ApplyWorkspaceSizing();
     }

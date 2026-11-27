@@ -34,6 +34,7 @@ public partial class MainWindow
         }
         if (args.Contains("--show-profiles")) ProfilesNav_Click(this, new RoutedEventArgs());
         if (args.Contains("--show-settings")) AppearanceNav_Click(this, new RoutedEventArgs());
+        if (args.Contains("--connection-details")) ConnectionDetails.IsExpanded = true;
     }
 
     internal void PrepareDesignButtonEditor()
@@ -48,6 +49,14 @@ public partial class MainWindow
         if (!_previewOnly || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CLICKLOOM_DATA_DIR")))
             throw new InvalidOperationException("Design checks require isolated data.");
         string original = ThemeManager.Current;
+        DevicesNav.ApplyTemplate();
+        DetailBackButton.ApplyTemplate();
+        ThemeCombo.ApplyTemplate();
+        if (DevicesNav.Template.FindName("Chrome", DevicesNav) is not Border navigationChrome || !FacetedBorder.GetIsFaceted(navigationChrome)
+            || DetailBackButton.Template.FindName("Chrome", DetailBackButton) is not Border pageChrome || FacetedBorder.GetIsFaceted(pageChrome)
+            || ThemeCombo.Template.FindName("PART_Popup", ThemeCombo) is not System.Windows.Controls.Primitives.Popup { Child: Border popupChrome }
+            || FacetedBorder.GetIsFaceted(popupChrome))
+            throw new InvalidOperationException("Only title bar controls should inherit the faceted shape.");
         var a = _deviceCards[0]; var b = _deviceCards[1];
         BackToGallery_Click(this, new RoutedEventArgs()); UpdateLayout();
         if (_selectedDevice is not null || DeviceInspector.Visibility != Visibility.Collapsed || InspectorSplitter.Visibility != Visibility.Collapsed

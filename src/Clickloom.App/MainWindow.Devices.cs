@@ -94,16 +94,14 @@ public partial class MainWindow
         }
         AdditionalDevicesList.ItemsSource = _additionalDevices;
         ReceiverConnectionsList.ItemsSource = _deviceCards;
-        AdditionalDevicesExpander.Visibility = _additionalDevices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        AdditionalDevicesSection.Visibility = _additionalDevices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateDeviceActivity();
-        int receivers = connections.Count(c => !c.IsAuxiliary && c.IsReceiver);
-        DevicesSubtitle.Text = $"{_deviceCards.Count} Windows mouse connections · {receivers} receivers · {_additionalDevices.Count} additional interfaces";
         DevicesList.ItemsSource = connections.Select(c => new DeviceRow(c.Name, c.Status + " · " + c.DevicePaths.Length + " input interfaces")).ToArray();
         DriverProfilesList.ItemsSource = _service?.HasDeviceRouting == true
             ? connections.Where(c => !c.IsAuxiliary && _service.CanRouteDevice(c.Key))
                 .Select(c => new DeviceCard(c.Key, c.Name, "DEVICE PROFILE", "Verified input route", ThemeManager.Brush("Accent"), c.Key)).ToArray() : [];
         EmptyDevicesBox.Visibility = _deviceCards.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        PresenceDetails.Text = "Current Windows connections only. Multiple interfaces from one device are grouped. Receiver presence cannot confirm wireless mouse power. Recent input is shown separately. Updated " + DateTime.Now.ToString("HH:mm:ss") + ".";
+        PresenceDetails.Text = "Last scan at " + DateTime.Now.ToString("HH:mm:ss") + ".";
         ApplyWorkspaceSizing();
     }
     private void AppearanceNav_Click(object sender, RoutedEventArgs e) => ShowPage("appearance");

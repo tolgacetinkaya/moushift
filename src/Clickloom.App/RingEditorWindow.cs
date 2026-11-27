@@ -107,7 +107,7 @@ public sealed partial class RingEditorWindow : Window
         var tabs = new StackPanel { Orientation = Orientation.Horizontal }; tabs.Children.Add(_profiles);
         var add = new Button { Content = "+ App-specific Circle", Margin = new(8, 0, 0, 0), IsEnabled = _deviceKey is not null }; add.Click += (_, _) => ShowApplicationPicker(); tabs.Children.Add(add); contextLabel.Children.Add(tabs);
         _scopeHint.Foreground = B("Muted"); contextLabel.Children.Add(_scopeHint); contexts.Children.Add(contextLabel);
-        var contextSurface = new FacetedBorder { Child = contexts, Style = (Style)FindResource("Surface"), Margin = new(16, 0, 16, 12), Padding = new(19, 10, 19, 10) };
+        var contextSurface = new Border { Child = contexts, Style = (Style)FindResource("Surface"), Margin = new(16, 0, 16, 12), Padding = new(19, 10, 19, 10) };
         Grid.SetRow(contextSurface, 1); root.Children.Add(contextSurface);
         _profiles.SelectionChanged += (_, _) => { if (_loading || _profiles.SelectedValue is not Guid id) return; _profileId = id; ResetNavigation(); Refresh(); RefreshCatalog(); UpdateScopeHint(); };
         _adapt.Checked += (_, _) => ChangeAdapt(); _adapt.Unchecked += (_, _) => ChangeAdapt();
@@ -130,7 +130,7 @@ public sealed partial class RingEditorWindow : Window
         foreach (var button in new[] { _open, _edit, _remove }) { button.Margin = new(5, 0, 0, 0); operations.Children.Add(button); }
         DockPanel.SetDock(operations, Dock.Right); inspector.Children.Add(operations);
         var detail = new StackPanel(); detail.Children.Add(_selection); _inherit.Margin = new(0, 10, 0, 0); detail.Children.Add(_inherit); inspector.Children.Add(detail); Grid.SetRow(inspector, 2); workspace.Children.Add(inspector);
-        body.Children.Add(new FacetedBorder { Background = B("DashboardStage"), BorderBrush = B("DashboardEdge"), BorderThickness = new(1), CornerRadius = new(7), Child = workspace });
+        body.Children.Add(new Border { Background = B("DashboardStage"), BorderBrush = B("DashboardEdge"), BorderThickness = new(1), CornerRadius = new(7), Child = workspace });
         var library = new DockPanel { Margin = new(24, 18, 24, 18) }; var libraryHead = new StackPanel(); libraryHead.Children.Add(Text("Action library", 19));
         var hint = Text("Drag an action onto the Circle.", 12, "Muted"); hint.Margin = new(0, 8, 0, 16); libraryHead.Children.Add(hint);
         _search.ToolTip = "Search actions"; System.Windows.Automation.AutomationProperties.SetName(_search, "Search actions");
@@ -141,7 +141,7 @@ public sealed partial class RingEditorWindow : Window
         { var button = new Button { Content = provider, FontSize = 11, Padding = new(3, 8, 3, 8), Margin = new(0, 0, 4, 0) }; _providerButtons[provider] = button; button.Click += (_, _) => { _provider = provider; RefreshCatalog(); }; providers.Children.Add(button); }
         libraryHead.Children.Add(providers); DockPanel.SetDock(libraryHead, Dock.Top); library.Children.Add(libraryHead);
         library.Children.Add(new ScrollViewer { Content = _catalog, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
-        var libraryBorder = new FacetedBorder { Background = B("DashboardCard"), BorderBrush = B("DashboardEdge"), BorderThickness = new(1), CornerRadius = new(7), Child = library }; Grid.SetColumn(libraryBorder, 2); body.Children.Add(libraryBorder); Grid.SetRow(body, 2); root.Children.Add(body);
+        var libraryBorder = new Border { Background = B("DashboardCard"), BorderBrush = B("DashboardEdge"), BorderThickness = new(1), CornerRadius = new(7), Child = library }; Grid.SetColumn(libraryBorder, 2); body.Children.Add(libraryBorder); Grid.SetRow(body, 2); root.Children.Add(body);
         var footer = new DockPanel { Margin = new(28, 16, 28, 20) }; var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         var preview = new Button { Content = "Preview", Margin = new(8, 0, 8, 0) }; preview.Click += (_, _) => { _preview?.Close(); _preview = new RingWindow(Slots, true); _preview.Show(); _preview.PositionAtCursor(); }; buttons.Children.Add(preview);
         var save = new Button { Content = "Save changes", Style = (Style)FindResource("Primary") };
@@ -407,7 +407,7 @@ public sealed partial class RingEditorWindow : Window
                 icon.Margin = new(0, 0, 12, 0);
                 var content = new DockPanel(); content.Children.Add(icon);
                 var title = Text(definition.Title, 12.5); title.TextTrimming = TextTrimming.CharacterEllipsis; content.Children.Add(title);
-                var row = new FacetedBorder { Child = content, Background = B("PanelLight"), BorderBrush = B("ControlEdge"), BorderThickness = new(1), Padding = new(14, 10, 14, 10), Margin = new(0, 3, 0, 3), Cursor = Cursors.Hand, ToolTip = "Drag to a position, or double-click to add" };
+                var row = new Border { Child = content, Background = B("PanelLight"), BorderBrush = B("ControlEdge"), BorderThickness = new(1), CornerRadius = new(8), Padding = new(14, 10, 14, 10), Margin = new(0, 3, 0, 3), Cursor = Cursors.Hand, ToolTip = "Drag to a position, or double-click to add" };
                 WireDrag(row, new PlacementDrag(_profileId, definition, null)); row.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2) { if (_selected is not null) PlaceDefinition(definition, _selected, false); else if (_folder.Count > 0) PlaceDefinition(definition, _folder.Append(RingNavigation.Resolve(Slots, _folder)!.Children.Count).ToArray(), true); else SetStatus("Select a position first.", true); e.Handled = true; } };
                 list.Children.Add(FindMyAction(definition.Id) is { } saved ? MyActionRow(row, saved) : row);
             }
