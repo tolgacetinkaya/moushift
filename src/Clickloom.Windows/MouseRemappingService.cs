@@ -159,7 +159,7 @@ public sealed partial class MouseRemappingService : IDisposable
         if (request is null || request.Id != requestId) return false;
         if (!RingActionSelection.TryResolve(request, invocation, out var action, out bool close)) return false;
         var stamp = _dispatchState.Current;
-        if (!RingActionSelection.CanDispatch(request, stamp, _enabled, NativeMethods.GetForegroundWindow())) { DismissRing(); return false; }
+        if (!RingActionSelection.CanDispatch(request, stamp, _enabled, NativeMethods.GetForegroundWindow())) { DismissRing(request.Id); return false; }
         if (close)
         {
             if (!ReferenceEquals(Interlocked.CompareExchange(ref _ringRequest, null, request), request)) return false;
@@ -761,6 +761,12 @@ public sealed partial class MouseRemappingService : IDisposable
                 _ringWheelRemainder = 0;
                 Volatile.Write(ref _ringBounds, new(0, 0, 0, 0));
                 Volatile.Write(ref _ringRequest, request);
+                // Opening and pausing can race across the action worker and UI threads.
+                if (!RingActionSelection.CanDispatch(request, _dispatchState.Current, _enabled, NativeMethods.GetForegroundWindow()))
+                {
+                    DismissRing(request.Id);
+                    break;
+                }
                 TraceCircle("open", profile.DeviceName ?? "Mouse");
                 if (work.DriverlessCircle) Interlocked.Increment(ref _rawCircleTriggerCount);
                 try { RingRequested?.Invoke(this, request); } catch { DismissRing(); throw; }

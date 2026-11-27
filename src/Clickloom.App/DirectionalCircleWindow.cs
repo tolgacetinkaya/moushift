@@ -76,7 +76,7 @@ internal sealed class DirectionalCircleWindow : Window
     {
         var section = new StackPanel { Margin = new(0, 0, 12, 12) };
         var header = new DockPanel { Margin = new(0, 0, 0, 6) };
-        var clear = new Button { Content = "Clear", Style = FindStyle("ContextAction"), HorizontalAlignment = HorizontalAlignment.Right };
+        var clear = new Button { Content = "Clear", Style = FindStyle("Quiet"), HorizontalAlignment = HorizontalAlignment.Right };
         DockPanel.SetDock(clear, Dock.Right);
         header.Children.Add(clear);
         header.Children.Add(new TextBlock { Text = caption, VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold });
