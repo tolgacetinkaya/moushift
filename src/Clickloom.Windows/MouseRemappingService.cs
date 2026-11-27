@@ -663,24 +663,31 @@ public sealed partial class MouseRemappingService : IDisposable
             while (!_stopping)
             {
                 DrainMiddleReplays();
-                while (_captureUpdates.TryDequeue(out var captured))
+                // Bound each drain so new input cannot starve actions or shutdown.
+                for (int count = 0; count < 32 && !_stopping && _captureUpdates.TryDequeue(out var captured); count++)
                 {
                     Interlocked.Decrement(ref _observationCount);
                     try { ShortcutCaptured?.Invoke(this, captured); } catch { }
                 }
                 var currentEpoch = _dispatchState.Current.EnableEpoch;
                 if (epoch != currentEpoch) { ReleaseHeldOutputs(); epoch = currentEpoch; }
-                while (_observations.TryDequeue(out var observed))
+                for (int count = 0; count < 32 && !_stopping && _observations.TryDequeue(out var observed); count++)
                 {
                     Interlocked.Decrement(ref _observationCount);
                     try { InputObserved?.Invoke(this, observed); } catch { /* Consumer failures cannot disable input cleanup. */ }
                 }
-                while (_auxiliaryObservations.TryDequeue(out var observedKey))
+                for (int count = 0; count < 32 && !_stopping && _auxiliaryObservations.TryDequeue(out var observedKey); count++)
                 {
                     Interlocked.Decrement(ref _observationCount);
                     try { AuxiliaryInputObserved?.Invoke(this, observedKey); } catch { }
                 }
-                if (!_queue.TryDequeue(out var work)) { _wake.WaitOne(100); continue; }
+                if (_stopping) break;
+                if (!_queue.TryDequeue(out var work))
+                {
+                    if (_captureUpdates.IsEmpty && _observations.IsEmpty && _auxiliaryObservations.IsEmpty)
+                        _wake.WaitOne(100);
+                    continue;
+                }
                 Interlocked.Decrement(ref _queueCount);
                 if (!InputDispatchState.CanExecute(new(work.Epoch, work.RoutingGeneration), _dispatchState.Current, _enabled, work.IsRelease))
                 { Volatile.Write(ref _inputStatus, "Action cancelled: enable state or profile changed."); continue; }
@@ -901,7 +908,7 @@ public sealed partial class MouseRemappingService : IDisposable
             string name;
             lock (_settingsGate)
             {
-                var profile = ProfileResolver.Resolve(_settings, path).DeepClone();
+                var profile = ProfileResolver.Resolve(_settings, path);
                 name = "Device profiles";
                 var stamp = _dispatchState.UpdateRouting(new(hwnd, pid, path, profile.Id, _settingsRevision));
                 var previous = Volatile.Read(ref _snapshot);
@@ -912,7 +919,7 @@ public sealed partial class MouseRemappingService : IDisposable
                     // Anonymous mouse/keyboard-hook input must never execute shared mappings.
                     var actions = new Dictionary<MouseControl, InputAction>();
                     var auxiliary = new Dictionary<int, InputAction>();
-                    Volatile.Write(ref _snapshot, new(name, actions, auxiliary, ownWindow, stamp.RoutingGeneration, hwnd) { Profile = profile, ApplicationPath = path });
+                    Volatile.Write(ref _snapshot, new(name, actions, auxiliary, ownWindow, stamp.RoutingGeneration, hwnd) { Profile = profile.DeepClone(), ApplicationPath = path });
                     if (Volatile.Read(ref _ringRequest) is { } ring && ring.RoutingGeneration != stamp.RoutingGeneration) DismissRing("foreground/settings changed");
                 }
             }
