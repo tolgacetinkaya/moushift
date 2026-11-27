@@ -24,8 +24,9 @@ public partial class MainWindow
             || CircleTemplateList.SelectedItem is not ComboBoxItem { Tag: string templateId, Content: string name }
             || !Enum.TryParse<CircleTemplate>(templateId, out var template)) return;
 
-        if (ConfirmCircleReplacement(profile, $"Apply the {name} template?", null, "Apply template"))
-            ReplaceCircleLayout(profile.Id, CircleLayoutTransfer.CreateTemplate(template), name + " template applied.");
+        var slots = CircleLayoutTransfer.CreateTemplate(template);
+        if (ConfirmCircleReplacement(profile, $"Apply the {name} template?", slots, null, "Apply template"))
+            ReplaceCircleLayout(profile.Id, slots, name + " template applied.");
     }
 
     private void ExportCircleLayout_Click(object sender, RoutedEventArgs e)
@@ -105,15 +106,22 @@ public partial class MainWindow
 
         string? note = layout.OmittedActions == 0 ? null
             : OmittedCircleActionsMessage(layout.OmittedActions) + " Those positions will be empty.";
-        if (ConfirmCircleReplacement(profile, "Import this Circle layout?", note, "Import layout"))
+        if (ConfirmCircleReplacement(profile, "Import this Circle layout?", layout.Slots, note, "Import layout"))
             ReplaceCircleLayout(profile.Id, layout.Slots, "Circle layout imported.");
     }
 
-    private bool ConfirmCircleReplacement(MappingProfile profile, string heading, string? note, string accept)
+    private bool ConfirmCircleReplacement(MappingProfile profile, string heading, IReadOnlyList<RingSlot> slots, string? note, string accept)
     {
         string deviceName = profile.DeviceName ?? "Selected mouse";
         string profileName = profile.ApplicationPath is null ? "All applications" : profile.Name;
         string explanation = $"{deviceName} · {profileName}\n\nThis replaces the saved Circle layout for this profile only.";
+        string positions = string.Join(" · ", slots.Select(slot => slot.Kind switch
+        {
+            RingSlotKind.Folder => $"{slot.Name} ({slot.Children.Count} positions)",
+            RingSlotKind.Command when slot.Action.Kind == ActionKind.Disabled => "Empty",
+            _ => slot.Name
+        }));
+        explanation += "\n\n" + positions;
         if (note is not null) explanation += "\n\n" + note;
         var dialog = new ConfirmActionWindow("Replace Circle layout", heading, explanation, accept) { Owner = this };
         return dialog.ShowDialog() == true;
