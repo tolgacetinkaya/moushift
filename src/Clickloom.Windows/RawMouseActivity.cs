@@ -13,6 +13,7 @@ public sealed class RawMouseActivity : IDisposable
     public event EventHandler<string>? Observed;
     public event EventHandler<RawMouseButtonEvent>? ButtonObserved;
     public event EventHandler<RawMouseWheelEvent>? WheelObserved;
+    public event EventHandler<RawMouseButtonEvent>? VerticalWheelObserved;
     public RawMouseActivity(nint window)
     {
         var devices = new[] { new RawRegistration { UsagePage = 1, Usage = 2, Flags = 0x2100, Window = window } };
@@ -55,6 +56,11 @@ public sealed class RawMouseActivity : IDisposable
                 ButtonObserved?.Invoke(this, new(path, transition.Control, transition.Pressed));
             if (DecodeHorizontalWheel(packet.Mouse.ButtonFlags, packet.Mouse.ButtonData) is { } delta)
                 WheelObserved?.Invoke(this, new(path, delta));
+            if ((packet.Mouse.ButtonFlags & 0x400) != 0 && packet.Mouse.ButtonData != 0)
+            {
+                var control = unchecked((short)packet.Mouse.ButtonData) > 0 ? MouseControl.WheelUp : MouseControl.WheelDown;
+                VerticalWheelObserved?.Invoke(this, new(path, control, true));
+            }
         }
         DateTime now = DateTime.UtcNow;
         if (_reported.TryGetValue(header.Device, out var last) && now - last < TimeSpan.FromMilliseconds(500)) return;

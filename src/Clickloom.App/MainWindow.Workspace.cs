@@ -56,6 +56,7 @@ public partial class MainWindow
     private void OpenCircleWorkspace()
     {
         if (_circleEditor is not null || EditingProfile.DeviceKey is null) return;
+        CloseInputTest();
         _circleReturnToDetail = DeviceDetailPage.Visibility == Visibility.Visible;
         _circleEditor = new RingEditorWindow(_settings, _editingProfileId, _service, _selectedDevice?.Name ?? EditingProfile.DeviceName);
         CircleWorkspaceHost.Content = _circleEditor.HostIn(this, SaveCircleWorkspace, () => TryCloseCircleEditor(),

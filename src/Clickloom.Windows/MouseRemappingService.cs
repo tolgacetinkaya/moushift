@@ -129,6 +129,13 @@ public sealed partial class MouseRemappingService : IDisposable
     public void SetRingBounds(int left, int top, int width, int height) => Volatile.Write(ref _ringBounds, new(left, top, left + width, top + height));
     public void DismissRing()
         => DismissRing("application/selection");
+    public void DismissRing(Guid requestId)
+    {
+        var request = Volatile.Read(ref _ringRequest);
+        if (request?.Id != requestId || !ReferenceEquals(Interlocked.CompareExchange(ref _ringRequest, null, request), request)) return;
+        TraceCircle("close", "application/selection");
+        NotifyRingDismissed();
+    }
     private void DismissRing(string reason)
     {
         if (Interlocked.Exchange(ref _ringRequest, null) is not null)

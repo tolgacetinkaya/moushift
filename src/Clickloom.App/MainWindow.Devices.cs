@@ -21,6 +21,10 @@ public partial class MainWindow
             _deviceActivity = new RawMouseActivity(handle);
             _deviceActivity.ButtonObserved += (_, input) => _service?.ObserveRawMouseButton(input);
             _deviceActivity.WheelObserved += (_, input) => _service?.ObserveRawMouseWheel(input);
+            _deviceActivity.ButtonObserved += (_, input) => ObserveInputTest(input);
+            _deviceActivity.WheelObserved += (_, input) => ObserveInputTest(
+                new(input.DevicePath, input.Delta > 0 ? Clickloom.Core.MouseControl.WheelRight : Clickloom.Core.MouseControl.WheelLeft, true));
+            _deviceActivity.VerticalWheelObserved += (_, input) => ObserveInputTest(input);
             _service?.SetRawInputAvailable(true);
             _deviceActivity.Observed += (_, path) =>
             {
@@ -51,6 +55,7 @@ public partial class MainWindow
     }
     private void StopDeviceActivity()
     {
+        CloseInputTest();
         _service?.SetRawInputAvailable(false);
         _activitySource?.RemoveHook(ActivityMessage);
         _deviceActivity?.Dispose(); _deviceActivity = null;

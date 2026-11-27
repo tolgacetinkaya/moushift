@@ -227,7 +227,12 @@
                     </StackPanel>
                     <StackPanel VerticalAlignment="Center" Margin="0,0,8,0"><TextBlock Text="Button map" FontWeight="SemiBold" FontSize="16"/><TextBlock Text="Select a marker to edit its assignment." Style="{StaticResource Caption}" FontSize="12" Margin="0,3,0,0"/></StackPanel>
                   </DockPanel>
-                  <Expander Grid.Row="2" x:Name="ScopeExpander" Header="Input support" Margin="0,8,0,0">
+                  <StackPanel Grid.Row="2">
+                  <Button x:Name="InputTestButton" Content="Test a button" Click="InputTest_Click" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                  <TextBlock x:Name="InputTestResult" Visibility="Collapsed" TextWrapping="Wrap" MaxHeight="92" TextTrimming="CharacterEllipsis"
+                             Style="{StaticResource Caption}" Margin="0,8,0,0"
+                             AutomationProperties.LiveSetting="Polite"/>
+                  <Expander x:Name="ScopeExpander" Header="Input support" Margin="0,8,0,0">
                     <StackPanel>
                       <TextBlock x:Name="ScopeLabel" Style="{StaticResource Caption}" />
                       <TextBlock x:Name="ScopeDescription" Style="{StaticResource Caption}" FontSize="12" />
@@ -236,6 +241,7 @@
                       <CheckBox x:Name="ShowAuxiliaryCheck" Visibility="Collapsed" Content="Extra buttons (F13–F24)" Checked="ShowAuxiliary_Changed" Unchecked="ShowAuxiliary_Changed" Margin="0,10,0,0" />
                     </StackPanel>
                   </Expander>
+                  </StackPanel>
                 </Grid>
               </local:FacetedBorder>
             </Grid>

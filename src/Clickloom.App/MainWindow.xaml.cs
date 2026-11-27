@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private bool _editingSavedProfile;
     private bool _deviceScope;
     private RingWindow? _ringWindow;
+    private Guid? _visibleRingRequestId;
     private bool _ringPreview;
     private AppSettings _settings = AppSettings.CreateDefault();
     private readonly SettingsStore _store;
@@ -109,7 +110,10 @@ public partial class MainWindow : Window
             });
             _service.RingScrolled += (_, scroll) => Dispatcher.BeginInvoke(() =>
             { if (_service.IsCurrentRing(scroll.Id)) _ringWindow?.ScrollAtCursor(scroll.Delta); });
-            _service.RingDismissed += (_, _) => Dispatcher.BeginInvoke(CloseRingVisual);
+            _service.RingDismissed += (_, _) => Dispatcher.BeginInvoke(() =>
+            {
+                if (_visibleRingRequestId is { } id && !_service.IsCurrentRing(id)) CloseRingVisual();
+            });
             _service.Start();
             ShortcutChoice.CaptureService = _service;
             UpdateEngineState();
@@ -638,6 +642,7 @@ public partial class MainWindow : Window
     {
         if (_disposed || _service is null) return;
         if (!_service.IsEnabled && !_ringPreview) CloseRingVisual();
+        if (_service.IsEnabled && _inputTestDeviceKey is not null) CloseInputTest();
         bool enabled = _service.IsEnabled;
         EngineBadge.Text = !_service.IsRunning ? "Input unavailable" : !_service.CanEnable ? "Waiting for mouse" : enabled ? _service.DriverlessCircleMode ? "Circle enabled · Driverless" : "Enabled" : "Paused";
         EngineBadge.Foreground = (Brush)FindResource(enabled ? "Accent" : "Muted");
@@ -684,6 +689,7 @@ public partial class MainWindow : Window
     {
         if (page == "mappings" && _selectedDevice?.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse to edit its separate profile."; return; }
         if (!TryCloseCircleEditor()) return;
+        CloseInputTest();
         if (page == "devices")
         {
             _selectedDevice = null; _editingSavedProfile = false; _returnToProfiles = false;
@@ -823,6 +829,7 @@ public partial class MainWindow : Window
     private void OpenRing(IReadOnlyList<RingSlot> slots, RingRequest? request)
     {
         CloseRingVisual(); _ringPreview = request is null;
+        _visibleRingRequestId = request?.Id;
         var window = new RingWindow(slots, _ringPreview, request?.Driverless == true); _ringWindow = window;
         window.Invoked += (_, invocation) =>
         {
@@ -830,11 +837,17 @@ public partial class MainWindow : Window
             else StatusText.Text = "Preview: " + RingNavigation.Resolve(slots, invocation.Path)?.Name + " (action not executed)";
         };
         window.Closed += (_, _) =>
-        { if (ReferenceEquals(_ringWindow, window)) { _ringWindow = null; _ringPreview = false; if (request is not null) _service?.DismissRing(); } };
+        {
+            if (!ReferenceEquals(_ringWindow, window)) return;
+            _ringWindow = null;
+            _visibleRingRequestId = null;
+            _ringPreview = false;
+            if (request is not null) _service?.DismissRing(request.Id);
+        };
         window.Show(); var bounds = window.PositionAtCursor();
         if (request is not null) _service?.SetRingBounds(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
     }
-    private void CloseRingVisual() { var ring = _ringWindow; _ringWindow = null; _ringPreview = false; ring?.Close(); }
+    private void CloseRingVisual() { var ring = _ringWindow; _ringWindow = null; _visibleRingRequestId = null; _ringPreview = false; ring?.Close(); }
 
     private void UpdateCallouts()
     {
