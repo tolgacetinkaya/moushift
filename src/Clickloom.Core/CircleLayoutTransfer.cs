@@ -86,7 +86,13 @@ public static class CircleLayoutTransfer
         if (slot.Kind == RingSlotKind.Folder)
             return new(Folder, PortableLabel(slot.Name), WriteSlots(slot.Children, depth + 1, ref omitted));
 
-        bool privateAction = slot.DefinitionId?.StartsWith("my-action:", StringComparison.Ordinal) == true;
+        if (slot.Sequence is not null)
+        {
+            omitted++;
+            return new(Empty);
+        }
+
+        bool privateAction = CustomCircleAction.IsReference(slot.DefinitionId);
         var portableAction = PortableActions.Values.FirstOrDefault(definition => Matches(slot, definition.Template));
         // Recreate commands with their catalog titles and without references to local definitions.
         if (portableAction is not null) return new(portableAction.Id);
