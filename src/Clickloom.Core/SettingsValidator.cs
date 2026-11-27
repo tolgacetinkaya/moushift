@@ -129,6 +129,14 @@ public static class SettingsValidator
             if (!visited.Add(slot)) { errors.Add("Ring folders cannot contain cycles or shared segments."); continue; }
             if (string.IsNullOrWhiteSpace(slot.Name) || slot.Name.Length > 48) errors.Add("Ring action names must contain 1–48 characters.");
             if (!Enum.IsDefined(slot.Kind)) errors.Add("Unsupported ring segment type.");
+            if (slot.Outline is { } outline)
+            {
+                if (!double.IsFinite(outline.Thickness) || outline.Thickness is < RingOutline.MinimumThickness or > RingOutline.MaximumThickness)
+                    errors.Add($"Circle outline width must be between {RingOutline.MinimumThickness} and {RingOutline.MaximumThickness}.");
+                if (outline.Colors is not { Count: >= 1 and <= RingOutline.MaximumColors }
+                    || outline.Colors.Any(color => color is not { Length: 7 } || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit)))
+                    errors.Add($"A Circle outline needs 1–{RingOutline.MaximumColors} colors in #RRGGBB format.");
+            }
             ValidateSequence(slot, errors);
             foreach (var action in new[] { slot.Action, slot.DecreaseAction, slot.IncreaseAction })
             {

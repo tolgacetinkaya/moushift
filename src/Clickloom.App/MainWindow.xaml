@@ -136,8 +136,9 @@
         <TextBlock x:Name="PageTitle" Visibility="Collapsed"/>
         <Grid>
           <Grid x:Name="DevicesWorkspace">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
             <Grid.ColumnDefinitions><ColumnDefinition MinWidth="380" Width="*"/><ColumnDefinition x:Name="InspectorSplitterColumn" Width="0"/><ColumnDefinition x:Name="InspectorColumn" MinWidth="0" MaxWidth="640" Width="0"/></Grid.ColumnDefinitions>
-            <Grid x:Name="DevicesPage" Margin="24,22,24,16">
+            <Grid x:Name="DevicesPage" Grid.RowSpan="2" Margin="24,22,24,16">
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <Grid Margin="2,0,2,18">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -197,17 +198,17 @@
                 </Border>
               </Grid>
             </Grid>
-            <Grid x:Name="DeviceDetailPage" Visibility="Collapsed" Margin="20,13,14,14">
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-              <StackPanel Margin="4,0,4,17">
-                <Button x:Name="DetailBackButton" Content="‹  All mice" Click="BackToGallery_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
-                <DockPanel>
-                  <Button DockPanel.Dock="Right" Content="Rename mouse" Click="RenameMouse_Click" Style="{StaticResource Quiet}" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                  <TextBlock x:Name="DetailHeading" FontSize="35" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                </DockPanel>
-                <ContentControl x:Name="DetailBatteryInfo" Visibility="{Binding Content.BatteryVisibility, RelativeSource={RelativeSource Self}}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Left" Margin="0,9,0,0"/>
-              </StackPanel>
-              <Border Grid.Row="1" Background="{DynamicResource DashboardStage}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="12" Padding="24,14">
+            <StackPanel Grid.ColumnSpan="3" Margin="24,13,18,17" Visibility="{Binding Visibility, ElementName=DeviceDetailPage}">
+              <Button x:Name="DetailBackButton" Content="‹  All mice" Click="BackToGallery_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+              <DockPanel>
+                <Button x:Name="CustomizeCircleButton" DockPanel.Dock="Right" Content="Customize Circle" Click="EditRing_Click" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <Button DockPanel.Dock="Right" Content="Rename mouse" Click="RenameMouse_Click" Style="{StaticResource Quiet}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                <TextBlock x:Name="DetailHeading" FontSize="35" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              </DockPanel>
+              <ContentControl x:Name="DetailBatteryInfo" Visibility="{Binding Content.BatteryVisibility, RelativeSource={RelativeSource Self}}" ContentTemplate="{StaticResource BatteryBadge}" HorizontalAlignment="Left" Margin="0,9,0,0"/>
+            </StackPanel>
+            <Grid x:Name="DeviceDetailPage" Grid.Row="1" Visibility="Collapsed" Margin="20,0,8,14">
+              <Border Background="{DynamicResource DashboardStage}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="12" Padding="24,14">
                 <Grid x:Name="DiagramPane">
                   <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -260,14 +261,14 @@
                 </Grid>
               </Border>
             </Grid>
-            <GridSplitter x:Name="InspectorSplitter" Visibility="Collapsed" Grid.Column="1" Style="{StaticResource WorkspaceSplitter}" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="InspectorSplitter_DragCompleted" ToolTip="Drag to resize settings" AutomationProperties.Name="Resize settings panel"/>
-            <Border x:Name="DeviceInspector" Grid.Column="2" Visibility="Collapsed" Margin="0,13,18,14" Background="{DynamicResource DashboardCard}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="12">
+            <GridSplitter x:Name="InspectorSplitter" Visibility="Collapsed" Grid.Row="1" Grid.Column="1" Style="{StaticResource WorkspaceSplitter}" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="InspectorSplitter_DragCompleted" ToolTip="Drag to resize settings" AutomationProperties.Name="Resize settings panel"/>
+            <Border x:Name="DeviceInspector" Grid.Row="1" Grid.Column="2" Visibility="Collapsed" Margin="0,0,18,14" Background="{DynamicResource DashboardCard}" BorderBrush="{DynamicResource DashboardEdge}" BorderThickness="1" CornerRadius="12">
               <Grid>
                 <StackPanel x:Name="InspectorEmpty" VerticalAlignment="Center" Margin="28"><TextBlock Text="Your mouse, your setup." FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="Choose a mouse on the left to edit its buttons and Click Circle." Style="{StaticResource Caption}" Margin="0,12,0,0"/></StackPanel>
                 <Border x:Name="MappingPage" Visibility="Collapsed" Padding="24,19,24,12">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition x:Name="EditorColumn" Width="*"/></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <StackPanel>
                       <TextBlock Text="Assignments" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap"/>
 
@@ -277,12 +278,8 @@
                       </Grid>
                       <TextBlock x:Name="ProfileContext" Style="{StaticResource Caption}" FontSize="11" Margin="0,7,0,0"/>
                     </StackPanel>
-                    <Border Grid.Row="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Margin="0,18,0,8">
-                      <StackPanel Orientation="Horizontal" Margin="0,0,0,8"><Button x:Name="MappingsNav" Content="Buttons" Style="{StaticResource ContextAction}" Click="MappingsNav_Click"/><Button x:Name="RingNav" Content="Customize Circle" Style="{StaticResource ContextAction}" Click="CircleTab_Click" Margin="6,0,0,0"/></StackPanel>
-                    </Border>
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,14,0,0" Padding="0,0,4,0">
                       <StackPanel>
-                        <StackPanel x:Name="ButtonsContent">
                   <Expander x:Name="SourceExpander" IsExpanded="True" Template="{StaticResource PlainExpander}">
                     <ListBox x:Name="BindingsList" SelectionChanged="BindingsList_SelectionChanged" KeyDown="BindingsList_KeyDown" AutomationProperties.Name="Mouse buttons" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                       <ListBox.ItemContainerStyle>
@@ -371,7 +368,7 @@
                           </StackPanel>
                           <StackPanel x:Name="RingPanel" Visibility="Collapsed" Margin="0,12,0,0">
 
-                            <Button Content="Edit circle" Click="EditRing_Click" Margin="0,16,0,8" />
+                            <Button Content="Customize Circle" Click="EditRing_Click" Margin="0,16,0,8" />
                             <Button Content="Open preview" Click="PreviewRing_Click" />
                           </StackPanel>
                           <TextBlock x:Name="AuxiliaryHint" Text="For an extra button configured as F13–F24 in your vendor app." Style="{StaticResource Caption}" Visibility="Collapsed" Margin="0,20,0,0" />
@@ -398,7 +395,6 @@
                       </Border>
                     </Grid>
                   </Border>
-                        </StackPanel>
                         <Button Content="Quick gestures…" Click="DirectionalCircle_Click"
                                 Style="{StaticResource ContextAction}" HorizontalAlignment="Left" Margin="0,8,0,0"/>
                         <Expander Header="Profile options" Margin="0,8,0,0"><StackPanel Margin="0,10,0,8">

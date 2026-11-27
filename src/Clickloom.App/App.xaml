@@ -4,12 +4,7 @@
       <Setter Property="Width" Value="6"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="GridSplitter">
-        <Grid Background="{TemplateBinding Background}"><Border x:Name="Divider" Width="1" Background="{DynamicResource Line}" HorizontalAlignment="Center"/></Grid>
-        <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Divider" Property="Width" Value="3"/><Setter TargetName="Divider" Property="Background" Value="{DynamicResource Accent}"/></Trigger>
-          <Trigger Property="IsDragging" Value="True"><Setter TargetName="Divider" Property="Width" Value="3"/><Setter TargetName="Divider" Property="Background" Value="{DynamicResource Accent}"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Divider" Property="Background" Value="{DynamicResource Accent}"/></Trigger>
-        </ControlTemplate.Triggers>
+        <Border Background="{TemplateBinding Background}"/>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="TextBlock">

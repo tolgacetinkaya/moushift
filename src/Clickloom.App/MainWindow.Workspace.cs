@@ -93,6 +93,6 @@ public partial class MainWindow
         DevicesWorkspace.Visibility = Visibility.Visible;
         DevicesPage.Visibility = _circleReturnToDetail ? Visibility.Collapsed : Visibility.Visible;
         DeviceDetailPage.Visibility = _circleReturnToDetail ? Visibility.Visible : Visibility.Collapsed;
-        ButtonsContent.Visibility = Visibility.Visible; CloseEditor(); SetInspectorTab(false); ApplyWorkspaceSizing();
+        CloseEditor(); ApplyWorkspaceSizing();
     }
 }

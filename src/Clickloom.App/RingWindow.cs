@@ -21,22 +21,24 @@ public sealed class RingWindow : Window
     private readonly List<int> _path = [];
     private readonly Canvas _canvas = new() { Width = CircleSize, Height = CircleSize, Background = Brushes.Transparent };
     private readonly List<Node> _nodes = [];
-    private readonly TextBlock _title = new() { FontSize = 11, FontWeight = FontWeights.SemiBold, Width = 68, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxHeight = 44 };
-    private readonly TextBlock _hint = new() { FontSize = 11, TextAlignment = TextAlignment.Center };
+    private readonly TextBlock _title = new() { FontSize = 12, FontWeight = FontWeights.SemiBold, Width = 68, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxHeight = 44 };
+    private readonly TextBlock _hint = new() { FontSize = 12, FontWeight = FontWeights.Medium, TextAlignment = TextAlignment.Center };
     private readonly System.Windows.Threading.DispatcherTimer _pointer = new() { Interval = TimeSpan.FromMilliseconds(25) };
     private readonly bool _preview;
     private readonly bool _driverless;
+    private readonly CircleColors _palette;
     private readonly Brush _glass;
     private readonly Effect? _inkShadow;
     private readonly long _opened = Stopwatch.GetTimestamp();
     private int[]? _hovered, _pressed;
     private bool _pressStarted, _pressCancelled, _adjusted;
 
-    public RingWindow(IReadOnlyList<RingSlot> slots, bool preview = false, bool driverless = false)
+    public RingWindow(IReadOnlyList<RingSlot> slots, bool preview = false, bool driverless = false, string? deviceKey = null)
     {
         _root = slots; _preview = preview; _driverless = driverless;
-        _glass = CircleVisuals.Glass();
-        _inkShadow = CircleVisuals.GlassInkShadow();
+        _palette = ThemeManager.CirclePaletteFor(deviceKey);
+        _glass = CircleVisuals.Glass(_palette);
+        _inkShadow = CircleVisuals.GlassInkShadow(_palette);
         Width = Height = CircleSize; FontFamily = CircleVisuals.TextFont; WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true; Background = Brushes.Transparent; ShowActivated = false; ShowInTaskbar = false; Topmost = true;
         Content = _canvas; Draw();
@@ -85,15 +87,16 @@ public sealed class RingWindow : Window
         for (int i = 0; i < _root.Count; i++) AddNode(_root[i], [i], CircleVisuals.Root(Center, i), _path.Count == 0 || _path[0] == i);
         if (_path.Count > 0 && RingNavigation.Resolve(_root, _path) is { } folder)
             for (int i = 0; i < folder.Children.Count; i++) AddNode(folder.Children[i], _path.Append(i).ToArray(), CircleVisuals.Child(Center, _path[0], i, folder.Children.Count), true);
-        _title.Foreground = ThemeManager.Brush("Ink");
-        var centerContent = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Effect = _inkShadow };
-        centerContent.Children.Add(new TextBlock { Text = _path.Count == 0 ? "\uE8BB" : "\uE72B", FontFamily = CircleVisuals.IconFont, FontSize = 14, Foreground = ThemeManager.Brush("Muted"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 0, 0, 4) });
+        var ink = CircleVisuals.LabelInk(_palette);
+        var surface = CircleVisuals.LabelSurface(_palette);
+        _title.Foreground = ink;
+        var centerContent = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        centerContent.Children.Add(new TextBlock { Text = _path.Count == 0 ? "\uE8BB" : "\uE72B", FontFamily = CircleVisuals.IconFont, FontSize = 14, Foreground = ink, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 0, 0, 4) });
         centerContent.Children.Add(_title);
-        Put(new Border { Width = 76, Height = 76, CornerRadius = new(38), Background = _glass, BorderBrush = ThemeManager.Brush("CircleGlassEdge"), BorderThickness = new(1), Child = centerContent }, Center, 76, 76);
-        _hint.Foreground = ThemeManager.Brush("Ink");
-        _hint.Effect = _inkShadow;
+        Put(new Border { Width = 76, Height = 76, CornerRadius = new(38), Background = surface, BorderBrush = ThemeManager.Brush("CircleGlassEdge"), BorderThickness = new(1), Child = centerContent }, Center, 76, 76);
+        _hint.Foreground = ink;
         if (_hint.Parent is Border previousHint) previousHint.Child = null;
-        var hintTray = new Border { Background = _glass, BorderBrush = ThemeManager.Brush("CircleGlassEdge"), BorderThickness = new(1),
+        var hintTray = new Border { Background = surface, BorderBrush = ThemeManager.Brush("CircleGlassEdge"), BorderThickness = new(1),
             Padding = new(10, 4, 10, 4), CornerRadius = new(12), Child = _hint, HorizontalAlignment = HorizontalAlignment.Center };
         var hintRow = new Grid { Width = CircleSize, IsHitTestVisible = false, Children = { hintTray } };
         Canvas.SetTop(hintRow, _path.Count == 0 ? 351 : 433);
@@ -103,13 +106,13 @@ public sealed class RingWindow : Window
 
     private void AddNode(RingSlot slot, int[] path, Point position, bool emphasized)
     {
-        var glyph = CircleVisuals.IconVisual(CircleVisuals.Icon(slot), 20, ThemeManager.Brush(CircleVisuals.Empty(slot) ? "Muted" : "Ink"));
+        var glyph = CircleVisuals.IconVisual(CircleVisuals.Icon(slot), 20, CircleVisuals.GlyphInk(_palette, CircleVisuals.Empty(slot)));
         glyph.HorizontalAlignment = HorizontalAlignment.Center;
         glyph.VerticalAlignment = VerticalAlignment.Center;
         glyph.Effect = _inkShadow;
         var highlight = new Border { CornerRadius = new(23), Child = glyph };
         var visual = new Border { Width = 46, Height = 46, CornerRadius = new(23), Background = _glass, BorderBrush = ThemeManager.Brush("CircleGlassEdge"),
-            BorderThickness = new(1), Opacity = emphasized ? 1 : .5, IsHitTestVisible = false, Child = highlight };
+            BorderThickness = new(1), Opacity = emphasized ? 1 : .5, IsHitTestVisible = false, Child = CircleVisuals.WithOutline(slot, highlight, emphasized, _palette) };
         System.Windows.Automation.AutomationProperties.SetName(visual, slot.Name); Put(visual, position, 46, 46); _nodes.Add(new(path, position, visual, highlight));
     }
     private void Put(FrameworkElement item, Point point, double width, double height) { Canvas.SetLeft(item, point.X - width / 2); Canvas.SetTop(item, point.Y - height / 2); _canvas.Children.Add(item); }
@@ -189,12 +192,28 @@ public sealed class RingWindow : Window
         if (Hit(Center) is not null || Hit(new(0, 0)) is not null) throw new InvalidOperationException("Blank space invokes actions.");
         foreach (string theme in new[] { "copper", "pink" })
         { string previous = ThemeManager.Current; ThemeManager.Apply(theme); if (((SolidColorBrush)ThemeManager.Brush("RingSelection")).Color.A is < 50 or > 90) throw new InvalidOperationException("Selection is no longer translucent."); ThemeManager.Apply(previous); }
+        if (!SystemParameters.HighContrast)
+        {
+            var previous = ThemeManager.Current;
+            foreach (var theme in new[] { "light", "dark" })
+            {
+                ThemeManager.Apply(theme);
+                var surface = ((SolidColorBrush)CircleVisuals.LabelSurface(new())).Color;
+                var ink = ((SolidColorBrush)CircleVisuals.LabelInk(new())).Color;
+                if (surface.A != 255 || ink.A != 255 || CircleVisuals.Contrast(surface, ink) < 4.5)
+                    throw new InvalidOperationException("Circle text must have sufficient contrast independently of the desktop.");
+            }
+            ThemeManager.Apply(previous);
+        }
         nint before = showWindow ? GetForegroundWindow() : 0; if (showWindow) Show();
         if (showWindow && before != 0 && GetForegroundWindow() != before) throw new InvalidOperationException("Circle stole keyboard focus.");
         RingInvocation? selection = null; Invoked += (_, value) => selection = value;
         Activate([4]); if (selection is null || !selection.Path.SequenceEqual(new[] { 4 })) throw new InvalidOperationException("Command selection was lost.");
         var folder = new RingSlot { Name = "Work", Kind = RingSlotKind.Folder, Children = RingDefaults.Create().Append(RingDefaults.Create()[0]).ToList() };
         var test = new RingWindow(new[] { folder }, true); RingInvocation? child = null; test.Invoked += (_, value) => child = value;
+        if (test._nodes[0].Visual.Child is not Grid folderVisual
+            || folderVisual.Children.OfType<System.Windows.Shapes.Ellipse>().SingleOrDefault() is not { IsHitTestVisible: false })
+            throw new InvalidOperationException("The folder outline is missing or can intercept input.");
         test.Activate([0]); if (test._nodes.Count != 10 || test._path.Count != 1) throw new InvalidOperationException("Nine-child folder did not open alongside its parent.");
         test.Activate([0, 8]); if (child is null || !child.Path.SequenceEqual(new[] { 0, 8 })) throw new InvalidOperationException("Ninth folder action lost its path.");
         var adjust = new RingWindow(new[] { new RingSlot { Name = "Volume", Kind = RingSlotKind.Adjustment } }, true); var directions = new List<int>(); adjust.Invoked += (_, value) => directions.Add(value.Direction); adjust.Adjust([0], 1); adjust.Adjust([0], -1); adjust.Close();
@@ -202,7 +221,7 @@ public sealed class RingWindow : Window
         var capture = new RingWindow(RingDefaults.Create(), true); int count = 0; capture.Invoked += (_, _) => count++;
         var first = CircleVisuals.Root(Center, 0); capture.Press(first); capture.Hover([1]); capture.Click(first);
         if (count != 0) throw new InvalidOperationException("Leaving a pressed action failed to cancel it."); capture.Close();
-        Console.WriteLine("PASS Circle: discrete hit targets, translucent themes, nine-child arc, capture cancellation and adjustment; no input injected.");
+        Console.WriteLine("PASS Circle: independent label contrast, decorative folder outline, discrete hit targets, translucent selection, nine-child arc, capture cancellation and adjustment; no input injected.");
     }
     private sealed record Node(int[] Path, Point Position, Border Visual, Border Highlight);
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }

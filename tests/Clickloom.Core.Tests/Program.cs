@@ -14,6 +14,8 @@ var tests = new (string Name, Action Run)[]
     ("Circle uses the same mouse trigger with application-specific content", CircleApplicationRouting),
     ("manual Circle selection and adaptation never cross mouse identities", CircleManualRouting),
     ("Circle metadata, variable folders and preferences survive restart", CircleNewPersistence),
+    ("per-item outlines survive moves, undo, save and reload without sharing colors", CircleOutlinePersistence),
+    ("Circle outlines validate thickness, palette size and RGB values", CircleOutlineValidation),
     ("every catalog preset has a valid executable configuration", CircleCatalogContract),
     ("Circle navigation preferences change only the invoking mouse", CircleNavigationPreferences),
     ("device-only profiles never inherit shared or another mouse actions", StrictDeviceProfiles),
@@ -496,6 +498,58 @@ static void CircleNewPersistence() => WithStore((store, _) =>
     Require(restored.CircleAutoSwitch == false && restored.ManualCircleProfileId == p.Id && !restored.InheritCircleTrigger, "Circle preferences lost.");
     Require(restored.RingSlots[1].Children[0].Children.Count == 8, "Legacy nested folder was discarded.");
 });
+static void CircleOutlinePersistence() => WithStore((store, _) =>
+{
+    var settings = AppSettings.CreateDefault();
+    store.Save(settings);
+    Require(!File.ReadAllText(store.FilePath).Contains("\"Outline\""), "The default profile should omit outline overrides.");
+    var device = ProfileResolver.CreateDeviceDefault("mouse:a", "Mouse A");
+    var document = new CircleDocument(device.RingSlots);
+    var original = new RingOutline { Thickness = 8, Colors = ["#aBcDeF", "#000000"] };
+    var custom = device.RingSlots[0].DeepClone();
+    custom.Outline = original;
+    Require(document.Place([0], custom, false, out var error), error);
+    original.Colors[0] = "#FF0000";
+    Require(document.Place([1], new RingSlot { Name = "Work", Kind = RingSlotKind.Folder,
+        Outline = new RingOutline { Enabled = false } }, false, out error), error);
+    Require(document.MoveInto([0], [1, 0], out error), error);
+    document.Undo();
+    Require(document.Slots[0].Outline?.Colors[0] == "#aBcDeF" && document.Slots[1].Children.Count == 0, "Undo lost a styled action.");
+    document.Redo();
+    Require(document.Swap([1], [2], out error), error);
+    device.RingSlots = document.Slots;
+    var second = ProfileResolver.CreateDeviceDefault("mouse:b", "Mouse B", device.RingSlots);
+    second.RingSlots[2].Children[0].Outline!.Colors.Clear();
+    Require(device.RingSlots[2].Children[0].Outline!.Colors.Count == 2, "Two mice share a palette.");
+    settings.Profiles.Add(device);
+    store.Save(settings);
+    var loaded = store.Load();
+    var slots = loaded.Settings.Profiles.Single(p => p.Id == device.Id).RingSlots;
+    Require(loaded.Warning is null && slots[0].Outline is null && slots[2].Outline is { Enabled: false }
+        && slots[2].Children[0].Outline is { Enabled: true, Thickness: 8 } restored
+        && restored.Colors.SequenceEqual(new[] { "#aBcDeF", "#000000" }), "Round trip changed the outline overrides.");
+});
+
+static void CircleOutlineValidation()
+{
+    var document = new CircleDocument(RingDefaults.Create());
+    void Check(RingOutline outline, bool valid)
+    {
+        bool accepted = document.Change(slots => slots[0].Outline = outline, out _);
+        Require(accepted == valid, "Unexpected outline validation result.");
+    }
+    Check(new() { Thickness = 1, Colors = Enumerable.Repeat("#00FF11", 6).ToList() }, true);
+    Check(new() { Thickness = double.NaN }, false);
+    Check(new() { Thickness = 0.9 }, false);
+    Check(new() { Thickness = 8.1 }, false);
+    Check(new() { Colors = [] }, false);
+    Check(new() { Colors = null! }, false);
+    Check(new() { Colors = Enumerable.Repeat("#FFFFFF", 7).ToList() }, false);
+    foreach (string invalid in new[] { "#abc", "ABCDEF", "#FF000000", "#12345g", null! })
+        Check(new() { Enabled = false, Colors = [invalid] }, false);
+    Require(document.Slots[0].Outline?.Colors.Count == 6, "Rejected edit replaced a valid outline.");
+}
+
 static void CircleCatalogContract()
 {
     Require(CircleCatalog.Actions.Select(a => a.Id).Distinct().Count() == CircleCatalog.Actions.Count, "Catalog IDs collide.");

@@ -10,10 +10,30 @@ namespace Clickloom.App;
 
 internal sealed record ThemeChoice(string Id, string Name) { public override string ToString() => Name; }
 
+internal sealed record CircleColors(string? Background = null, string? Text = null, string[]? Folder = null)
+{
+    public const int MaximumFolderColors = 6;
+
+    public CircleColors Normalized() => new(
+        Parse(Background) is { } background ? Format(background) : null,
+        Parse(Text) is { } text ? Format(text) : null,
+        Folder?.Take(MaximumFolderColors).Select(Parse).OfType<Color>().Select(Format).ToArray());
+
+    public static Color? Parse(string? value) =>
+        value is { Length: 7 } && value[0] == '#' &&
+        uint.TryParse(value.AsSpan(1), System.Globalization.NumberStyles.AllowHexSpecifier, null, out uint rgb)
+            ? Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb)
+            : null;
+
+    public static string Format(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+}
+
 internal static class ThemeManager
 {
     public static readonly ThemeChoice[] Choices = [new("light", "Light"), new("dark", "Dark")];
     public static string Current { get; private set; } = "light";
+    private static CircleColors _defaultCirclePalette = new();
+    private static Dictionary<string, CircleColors> _devicePalettes = new(StringComparer.OrdinalIgnoreCase);
     public static event Action? Changed;
     private static readonly Dictionary<string, ColorToken> Tokens = [];
     private static readonly Lazy<BitmapImage> DarkWorkspace = new(() => LoadWorkspace("workspace-machined.png"));
@@ -23,10 +43,15 @@ internal static class ThemeManager
 
     public static void Initialize(string? requested)
     {
-        string? saved = null;
-        try { if (File.Exists(PreferencesPath)) saved = JsonSerializer.Deserialize<Appearance>(File.ReadAllText(PreferencesPath))?.Theme; }
+        Appearance? saved = null;
+        try { if (File.Exists(PreferencesPath)) saved = JsonSerializer.Deserialize<Appearance>(File.ReadAllText(PreferencesPath)); }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { /* A bad appearance file never blocks input settings. */ }
-        Apply(requested ?? saved ?? "light");
+        _defaultCirclePalette = saved?.Circle?.Normalized() ?? new();
+        _devicePalettes = new(StringComparer.OrdinalIgnoreCase);
+        if (saved?.DevicePalettes is { } palettes)
+            foreach (var (key, palette) in palettes)
+                if (palette is not null) _devicePalettes[key] = palette.Normalized();
+        Apply(requested ?? saved?.Theme ?? "light");
     }
 
     public static void Apply(string id, bool persist = false)
@@ -52,11 +77,14 @@ internal static class ThemeManager
             ["ControlSurface"] = dark ? "#334145" : "#FBFDFE",
             ["ControlEdge"] = dark ? "#798F92" : "#7E999A",
             ["RingIdle"] = dark ? "#F0283135" : "#F5F6FCFC", ["RingSelection"] = dark ? "#4077D6C1" : "#405FB29D",
-            ["CircleGlassTop"] = dark ? "#A0687E83" : "#A8F5FDFF",
-            ["CircleGlassMid"] = dark ? "#80263135" : "#80F8FCFD",
-            ["CircleGlassBottom"] = dark ? "#66192329" : "#66C2D1D6",
-            ["CircleGlassEdge"] = dark ? "#AD8DA7AB" : "#A17B959B",
+            ["CircleGlassTop"] = dark ? "#BB55686F" : "#A8F5FDFF",
+            ["CircleGlassMid"] = dark ? "#C6233137" : "#80F8FCFD",
+            ["CircleGlassBottom"] = dark ? "#D910191D" : "#66C2D1D6",
+            ["CircleGlassEdge"] = dark ? "#CC8DA7AB" : "#A17B959B",
             ["CircleInkHalo"] = dark ? "#000000" : "#FFFFFF",
+            ["CircleLabelSurface"] = dark ? "#132025" : "#F3F8FA",
+            ["CircleFolderLight"] = dark ? "#83E9D4" : "#16816F",
+            ["CircleFolderShade"] = dark ? "#8CA8FF" : "#5B57C4",
             ["DashboardCard"] = dark ? "#CA222B2E" : "#EAFBFFFF",
             ["DashboardRaised"] = dark ? "#CE354345" : "#EAE4EEEC",
             ["DashboardStage"] = dark ? "#43232A2D" : "#52F7FCFC",
@@ -80,14 +108,30 @@ internal static class ThemeManager
                 resources[key] = brush;
             }
         }
-        if (persist)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(PreferencesPath)!);
-            string temporary = PreferencesPath + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(new Appearance(Current)));
-            File.Move(temporary, PreferencesPath, true);
-        }
+        if (persist) Save(_devicePalettes);
         Changed?.Invoke();
+    }
+
+    public static CircleColors CirclePaletteFor(string? deviceKey) =>
+        deviceKey is not null && _devicePalettes.TryGetValue(deviceKey, out var colors) ? colors : _defaultCirclePalette;
+
+    public static void SetCirclePalette(string deviceKey, CircleColors colors)
+    {
+        var updated = new Dictionary<string, CircleColors>(_devicePalettes, StringComparer.OrdinalIgnoreCase)
+        {
+            [deviceKey] = colors.Normalized()
+        };
+        Save(updated);
+        _devicePalettes = updated;
+    }
+
+    private static void Save(Dictionary<string, CircleColors> devicePalettes)
+    {
+        string path = PreferencesPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        string temporary = path + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(new Appearance(Current, _defaultCirclePalette, devicePalettes)));
+        File.Move(temporary, path, true);
     }
 
     public static Brush Brush(string key) => (Brush)System.Windows.Application.Current.FindResource(key);
@@ -97,7 +141,7 @@ internal static class ThemeManager
         bitmap.Freeze();
         return bitmap;
     }
-    private sealed record Appearance(string Theme);
+    private sealed record Appearance(string Theme, CircleColors? Circle = null, Dictionary<string, CircleColors>? DevicePalettes = null);
     private sealed class ColorToken : INotifyPropertyChanged
     {
         private Color _value;

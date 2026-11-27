@@ -26,6 +26,7 @@ public partial class MainWindow
         }
         UpdateLayout(); PlaceMarkers();
         if (_circleEditor is not null && args.Contains("--folder")) _circleEditor.ShowFolderPreview();
+        if (_circleEditor is not null && args.Contains("--show-circle-colors")) _circleEditor.ShowColorSettings(args.Contains("--show-color-picker"));
         if (_circleEditor is not null && args.Contains("--drag-preview")) { UpdateLayout(); _circleEditor.ShowDragPresentationPreview(); }
         if (args.Contains("--three-devices"))
         {
@@ -94,12 +95,15 @@ public partial class MainWindow
         // Both fixture profiles now exist. Selecting / browsing / theming must be read-only.
         byte[] before = File.ReadAllBytes(_store.FilePath);
         Guid id = EditingProfile.Id;
-        CircleTab_Click(this, new RoutedEventArgs()); UpdateLayout();
+        if (Math.Abs(DeviceDetailPage.TranslatePoint(new Point(), DevicesWorkspace).Y - DeviceInspector.TranslatePoint(new Point(), DevicesWorkspace).Y) > 1)
+            throw new InvalidOperationException("Assignments must start at the top of the button map.");
+        CustomizeCircleButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); UpdateLayout();
         if (CircleWorkspaceHost.Visibility != Visibility.Visible || DevicesWorkspace.Visibility != Visibility.Collapsed || EditingProfile.Id != id || _circleEditor is null)
             throw new InvalidOperationException("Circle did not open in the central workspace for the selected mouse.");
         _circleEditor.VerifyHostedSurface();
         if (!TryCloseCircleEditor()) throw new InvalidOperationException("Unchanged Circle could not close.");
-        MappingsNav_Click(this, new RoutedEventArgs());
+        if (CircleWorkspaceHost.Visibility != Visibility.Collapsed || DevicesWorkspace.Visibility != Visibility.Visible || EditingProfile.Id != id)
+            throw new InvalidOperationException("Back from Customize Circle did not restore this mouse's assignments.");
         var preferences = _workspacePreferences;
         ToggleSidebar_Click(this, new RoutedEventArgs()); UpdateLayout();
         if ((Visibility)Resources["SidebarLabelVisibility"] != Visibility.Collapsed)

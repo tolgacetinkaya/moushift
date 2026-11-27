@@ -51,7 +51,6 @@ public partial class MainWindow
         _loading = false;
         _editingProfileId = profile.Id;
         foreach (var row in _deviceCards) row.IsSelected = row.DeviceKey == profile.DeviceKey;
-        ButtonsContent.Visibility = Visibility.Visible;
         PopulateProfiles(); RefreshBindings(); CloseEditor(); ShowPage("mappings");
     }
     private void RenameProfile_Click(object sender, RoutedEventArgs e)

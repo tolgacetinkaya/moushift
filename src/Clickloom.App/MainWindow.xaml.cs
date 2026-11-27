@@ -269,7 +269,7 @@ public partial class MainWindow : Window
             }
             UpdateLayout();
             Window? ringPreview = null;
-            if (page == "ring") { ringPreview = new RingWindow(EditingProfile.RingSlots, true); ringPreview.Show(); ((RingWindow)ringPreview).PreviewSelection(0); ringPreview.UpdateLayout(); }
+            if (page == "ring") { ringPreview = new RingWindow(EditingProfile.RingSlots, true, deviceKey: EditingProfile.DeviceKey); ringPreview.Show(); ((RingWindow)ringPreview).PreviewSelection(0); ringPreview.UpdateLayout(); }
             else if (page is "ring-editor" or "ring-adjustment" or "ring-folder")
             {
                 var ringEditor = new RingEditorWindow(EditingProfile.RingSlots, null, EditingProfile.Name);
@@ -681,7 +681,6 @@ public partial class MainWindow : Window
             InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? _service.DriverlessCircleMode ? "Per-mouse Circle · Middle-click routing" : "Per-mouse assignments enabled" : "Paused";
     }
 
-    private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
     private void DevicesNav_Click(object sender, RoutedEventArgs e) { ShowPage("devices"); if (!_previewOnly) RefreshDevices(); }
     private void AboutNav_Click(object sender, RoutedEventArgs e) => ShowPage("about");
     private void ShowPage(string page)
@@ -720,7 +719,6 @@ public partial class MainWindow : Window
         }
         else CloseEditor();
         if (page == "setup") UpdateSetupStatus();
-        MappingsNav.Visibility = Visibility.Visible;
         foreach (var (navigation, selected) in new[] { (DevicesNav, workspace), (ProfilesNav, page == "profiles"), (AboutNav, page == "about"), (AppearanceNav, page is "appearance" or "setup"), (SetupNav, page == "setup") })
         {
             navigation.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, selected ? "Ink" : "Muted");
@@ -730,7 +728,6 @@ public partial class MainWindow : Window
             navigation.BorderThickness = new Thickness(1);
         }
         PageTitle.Text = page switch { "devices" => "Devices", "about" => "Help", "profiles" => "Profiles", "appearance" => "Settings", "setup" => "Input support", _ => "Customize" };
-        if (workspace) SetInspectorTab(ButtonsContent.Visibility == Visibility.Collapsed);
         ApplyWorkspaceSizing();
     }
     private void RefreshDevices_Click(object sender, RoutedEventArgs e) => RefreshDevices();
@@ -777,7 +774,7 @@ public partial class MainWindow : Window
         _loading = true; _deviceScope = true; DeviceScopeCheck.IsChecked = true; ShowAuxiliaryCheck.IsChecked = false; ShowAuxiliaryCheck.IsEnabled = false; _loading = false;
         _editingProfileId = profile.Id;
         foreach (var row in _deviceCards) row.IsSelected = row.DeviceKey == device.DeviceKey;
-        PopulateProfiles(); RefreshBindings(); CloseEditor(); ButtonsContent.Visibility = Visibility.Visible; ShowPage("mappings");
+        PopulateProfiles(); RefreshBindings(); CloseEditor(); ShowPage("mappings");
     }
 
     private void MouseCallout_Click(object sender, RoutedEventArgs e)
@@ -785,7 +782,7 @@ public partial class MainWindow : Window
         if (sender is not System.Windows.Controls.Button button || !Enum.TryParse<MouseControl>(button.Tag?.ToString(), out var input)) return;
         EditBinding(_bindings.Single(row => row.Mouse == input));
     }
-    private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
+    private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; }
     private void CloseEditor() { EditorPane.Visibility = Visibility.Collapsed; SourceExpander.Visibility = Visibility.Visible; }
     private void CloseEditor_Click(object sender, RoutedEventArgs e)
     {
@@ -828,7 +825,8 @@ public partial class MainWindow : Window
     {
         CloseRingVisual(); _ringPreview = request is null;
         _visibleRingRequestId = request?.Id;
-        var window = new RingWindow(slots, _ringPreview, request?.Driverless == true); _ringWindow = window;
+        string? deviceKey = request is null ? EditingProfile.DeviceKey : request.DeviceKey;
+        var window = new RingWindow(slots, _ringPreview, request?.Driverless == true, deviceKey); _ringWindow = window;
         window.Invoked += (_, invocation) =>
         {
             if (request is not null) _service?.InvokeRingAction(request.Id, invocation);
