@@ -13,6 +13,22 @@ internal sealed class RawCircleRouter
     public bool ContainsDevice(string key) => _devices.Values.Contains(key, StringComparer.Ordinal);
     public string? DeviceKey(string path) => _devices.GetValueOrDefault(path);
 
+    internal static bool SupportsAction(MouseControl control, InputAction? action) => control switch
+    {
+        MouseControl.XButton1 or MouseControl.XButton2 => action?.Kind is ActionKind.Ring or ActionKind.Shortcut,
+        MouseControl.LeftButton or MouseControl.RightButton or MouseControl.MiddleButton =>
+            action is { Kind: ActionKind.Ring } or { IsTaskViewAssignment: true },
+        MouseControl.WheelLeft or MouseControl.WheelRight => action?.Kind == ActionKind.Ring,
+        _ => false
+    };
+
+    internal static bool ReplacesNative(MouseControl control, InputAction? action) => control switch
+    {
+        MouseControl.XButton1 or MouseControl.XButton2 => action is { Kind: ActionKind.Shortcut, IsTaskViewAssignment: false },
+        MouseControl.MiddleButton => SupportsAction(control, action),
+        _ => false
+    };
+
     public bool Update(IReadOnlyList<MouseConnection> connections)
     {
         var next = connections.Where(c => !c.IsAuxiliary).SelectMany(c => c.DevicePaths.Select(path => (Path: path, c.Key)))
@@ -37,7 +53,7 @@ internal sealed class RawCircleRouter
         if (!_devices.TryGetValue(path, out string? key) || !_held.Add(identity) || !enabled) return null;
         var profile = ProfileResolver.ResolveDeviceInput(settings, foreground, key);
         var action = profile?.Bindings.FirstOrDefault(b => b.Input == control)?.Action;
-        return action is { Kind: ActionKind.Ring } or { IsTaskViewAssignment: true } ? profile : null;
+        return SupportsAction(control, action) ? profile : null;
     }
 
     // A tilt may repeat until released; high-resolution deltas may be smaller than one detent.
@@ -54,9 +70,10 @@ internal sealed class RawCircleRouter
         if (fired || total < 120) return null;
         var control = direction > 0 ? MouseControl.WheelRight : MouseControl.WheelLeft;
         var profile = ProfileResolver.ResolveDeviceInput(settings, foreground, key);
-        return profile?.Bindings.FirstOrDefault(b => b.Input == control)?.Action.Kind == ActionKind.Ring ? profile : null;
+        return SupportsAction(control, profile?.Bindings.FirstOrDefault(b => b.Input == control)?.Action) ? profile : null;
     }
 }
 
 public sealed record RawMouseButtonEvent(string DevicePath, MouseControl Control, bool Pressed);
 public sealed record RawMouseWheelEvent(string DevicePath, short Delta);
+public readonly record struct RawMouseMotionEvent(string DevicePath, int X, int Y);

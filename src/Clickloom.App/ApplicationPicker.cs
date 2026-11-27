@@ -55,8 +55,8 @@ internal sealed class ApplicationPicker : Grid, IDisposable
         _list.ItemTemplate = new DataTemplate { VisualTree = stack };
         _list.SelectionChanged += (_, _) => UpdateSelection();
         _list.MouseDoubleClick += (_, _) => Choose();
-        var listSurface = new FacetedBorder { Child = _list, Background = ThemeManager.Brush("Panel"),
-            BorderBrush = ThemeManager.Brush("DashboardEdge"), BorderThickness = new(1), Padding = new(12, 6, 12, 6) };
+        var listSurface = new Border { Child = _list, Background = ThemeManager.Brush("Panel"),
+            BorderBrush = ThemeManager.Brush("DashboardEdge"), BorderThickness = new(1), CornerRadius = new(10), Padding = new(12, 6, 12, 6) };
         Grid.SetRow(listSurface, 2); content.Children.Add(listSurface);
         var footer = new StackPanel { Margin = new(0, 14, 0, 0) };
         footer.Children.Add(_status); _selection.Margin = new(0, 8, 0, 12); footer.Children.Add(_selection);
@@ -76,11 +76,12 @@ internal sealed class ApplicationPicker : Grid, IDisposable
         _refresh.IsEnabled = false; _status.Text = "Finding your apps… You can search or browse while this loads.";
         try
         {
-            var result = _fixture is null ? await ApplicationCatalog.ScanAsync(token).WaitAsync(token) : new ApplicationCatalogResult(_fixture, false);
+            var result = _fixture is null ? await ApplicationCatalog.ScanAsync(token) : new ApplicationCatalogResult(_fixture, false);
             if (_disposed || token.IsCancellationRequested) return;
             _apps = result.Applications; _partial = result.Partial; Filter();
         }
         catch (OperationCanceledException) { }
+        catch (TimeoutException) { if (!_disposed) _status.Text = "Windows app discovery timed out. Browse for an app or try Refresh list."; }
         catch (Exception) { if (!_disposed) _status.Text = "Couldn't read the app list. Try Refresh list or Browse for an app."; }
         finally { if (!_disposed && !token.IsCancellationRequested) _refresh.IsEnabled = true; }
     }

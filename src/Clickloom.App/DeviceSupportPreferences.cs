@@ -12,8 +12,11 @@ internal static class DeviceSupportPreferences
         {
             string path = Path.Combine(folder, "device-input.json");
             if (!File.Exists(path)) return null;
-            var value = JsonSerializer.Deserialize<Preferences>(File.ReadAllText(path));
-            return value is not null && Path.IsPathFullyQualified(value.LibraryPath) ? value.LibraryPath : null;
+            using var input = File.OpenRead(path);
+            if (input.Length > 256 * 1024) return null;
+            var value = JsonSerializer.Deserialize<Preferences>(input);
+            return value?.LibraryPath is { Length: > 0 and <= 32_767 } library
+                && !library.Contains('\0') && Path.IsPathFullyQualified(library) ? library : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return null; }
     }

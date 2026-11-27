@@ -25,12 +25,12 @@ public partial class MainWindow
         var groups = _settings.Profiles.Where(profile => profile.DeviceKey is not null).GroupBy(profile => profile.DeviceKey)
             .Select(group => new ProfileGroup(
                 _deviceCards.FirstOrDefault(card => card.DeviceKey == group.Key)?.Name
-                    ?? group.Select(profile => profile.DeviceName).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name))
-                    ?? "Saved mouse",
+                    ?? MouseDisplayName(group.Key!, group.Select(profile => profile.DeviceName).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name))
+                    ?? "Saved mouse"),
                 group.OrderBy(profile => profile.ApplicationPath is not null).ThenBy(profile => profile.Name, StringComparer.CurrentCultureIgnoreCase)
                     .Select(profile => new ProfileSummary(profile.Id, profile.Name,
                         profile.ApplicationPath is null ? "All applications" : System.IO.Path.GetFileName(profile.ApplicationPath),
-                        profile.Bindings.Count(binding => binding.Action.Kind != ActionKind.Passthrough) + profile.AuxiliaryKeys.Count)).ToArray()))
+                        profile.Bindings.Count(binding => binding.Action.Kind != ActionKind.Passthrough))).ToArray()))
             .OrderBy(group => group.DeviceName, StringComparer.CurrentCultureIgnoreCase).ToArray();
         ProfileManagerList.ItemsSource = groups;
         EmptyProfiles.Visibility = groups.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -43,15 +43,12 @@ public partial class MainWindow
         if (profile is null || profile.DeviceKey is null) { ShowPage("devices"); return; }
         _editingSavedProfile = true;
         _returnToProfiles = true;
-        _selectedDevice = profile.DeviceKey is null ? GlobalDeviceCard()
-            : new(profile.DeviceKey, profile.DeviceName ?? _connections.FirstOrDefault(c => c.Key == profile.DeviceKey)?.Name ?? "Saved mouse", "PROFILE", "Saved profile", (System.Windows.Media.Brush)FindResource("Accent"), profile.DeviceKey);
+        _selectedDevice = _deviceCards.FirstOrDefault(card => card.DeviceKey == profile.DeviceKey)
+            ?? new(profile.DeviceKey, MouseDisplayName(profile.DeviceKey, profile.DeviceName ?? "Saved mouse"), "PROFILE", "Saved profile", (System.Windows.Media.Brush)FindResource("Accent"), profile.DeviceKey);
         _loading = true; _deviceScope = profile.DeviceKey is not null; DeviceScopeCheck.IsChecked = _deviceScope;
-        ShowAuxiliaryCheck.IsEnabled = !_deviceScope;
-        if (_deviceScope) ShowAuxiliaryCheck.IsChecked = false;
         _loading = false;
         _editingProfileId = profile.Id;
         foreach (var row in _deviceCards) row.IsSelected = row.DeviceKey == profile.DeviceKey;
-        ButtonsContent.Visibility = Visibility.Visible;
         PopulateProfiles(); RefreshBindings(); CloseEditor(); ShowPage("mappings");
     }
     private void RenameProfile_Click(object sender, RoutedEventArgs e)

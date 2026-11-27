@@ -21,6 +21,11 @@ public partial class MainWindow
             _deviceActivity = new RawMouseActivity(handle);
             _deviceActivity.ButtonObserved += (_, input) => _service?.ObserveRawMouseButton(input);
             _deviceActivity.WheelObserved += (_, input) => _service?.ObserveRawMouseWheel(input);
+            _deviceActivity.ButtonObserved += (_, input) => ObserveInputTest(input);
+            _deviceActivity.WheelObserved += (_, input) => ObserveInputTest(
+                new(input.DevicePath, input.Delta > 0 ? Clickloom.Core.MouseControl.WheelRight : Clickloom.Core.MouseControl.WheelLeft, true));
+            _deviceActivity.VerticalWheelObserved += (_, input) => ObserveInputTest(input);
+            _deviceActivity.MotionObserved += (_, input) => _service?.ObserveRawMouseMotion(input);
             _service?.SetRawInputAvailable(true);
             _deviceActivity.Observed += (_, path) =>
             {
@@ -51,6 +56,7 @@ public partial class MainWindow
     }
     private void StopDeviceActivity()
     {
+        CloseInputTest();
         _service?.SetRawInputAvailable(false);
         _activitySource?.RemoveHook(ActivityMessage);
         _deviceActivity?.Dispose(); _deviceActivity = null;
@@ -62,8 +68,9 @@ public partial class MainWindow
         for (int i = 0; i < rows.Length; i++)
         {
             var d = rows[i]; var current = target.FirstOrDefault(c => c.Key == d.Key);
-            if (current is null) target.Insert(i, new(d.Key, d.Name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key));
-            else if (current.Name != d.Name || current.Detail != d.Status) target[target.IndexOf(current)] = new(d.Key, d.Name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key);
+            string name = MouseDisplayName(d.Key, d.DisplayName);
+            if (current is null) target.Insert(i, new(d.Key, name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key));
+            else if (current.Name != name || current.Detail != d.Status) target[target.IndexOf(current)] = new(d.Key, name, d.Manufacturer, d.Status, ThemeManager.Brush("Accent"), d.IsAuxiliary ? null : d.Key);
             else if (target.IndexOf(current) != i) target.Move(target.IndexOf(current), i);
         }
         foreach (var row in target) row.BatteryPercent = rows.First(d => d.Key == row.Key).BatteryPercent;
@@ -88,17 +95,33 @@ public partial class MainWindow
         }
         AdditionalDevicesList.ItemsSource = _additionalDevices;
         ReceiverConnectionsList.ItemsSource = _deviceCards;
-        AdditionalDevicesExpander.Visibility = _additionalDevices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        AdditionalDevicesSection.Visibility = _additionalDevices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateDeviceActivity();
-        int receivers = connections.Count(c => !c.IsAuxiliary && c.IsReceiver);
-        DevicesSubtitle.Text = $"{_deviceCards.Count} Windows mouse connections · {receivers} receivers · {_additionalDevices.Count} additional interfaces";
         DevicesList.ItemsSource = connections.Select(c => new DeviceRow(c.Name, c.Status + " · " + c.DevicePaths.Length + " input interfaces")).ToArray();
         DriverProfilesList.ItemsSource = _service?.HasDeviceRouting == true
             ? connections.Where(c => !c.IsAuxiliary && _service.CanRouteDevice(c.Key))
-                .Select(c => new DeviceCard(c.Key, c.Name, "DEVICE PROFILE", "Verified input route", ThemeManager.Brush("Accent"), c.Key)).ToArray() : [];
+                .Select(c => new DeviceCard(c.Key, MouseDisplayName(c.Key, c.DisplayName), "DEVICE PROFILE", "Verified input route", ThemeManager.Brush("Accent"), c.Key)).ToArray() : [];
         EmptyDevicesBox.Visibility = _deviceCards.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        PresenceDetails.Text = "Current Windows connections only. Multiple interfaces from one device are grouped. Receiver presence cannot confirm wireless mouse power. Recent input is shown separately. Updated " + DateTime.Now.ToString("HH:mm:ss") + ".";
+        PresenceDetails.Text = "Last scan at " + DateTime.Now.ToString("HH:mm:ss") + ".";
         ApplyWorkspaceSizing();
+    }
+    private string MouseDisplayName(string key, string fallback) =>
+        _workspacePreferences.MouseNames?.GetValueOrDefault(key) is { Length: > 0 and <= 128 } name ? name : fallback;
+
+    private void RenameMouse_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedDevice?.DeviceKey is not { } key) return;
+        var dialog = new ProfileNameWindow(_selectedDevice.Name, "mouse") { Owner = this };
+        if (dialog.ShowDialog() != true || _selectedDevice?.DeviceKey != key) return;
+        var names = new Dictionary<string, string>(_workspacePreferences.MouseNames ?? []);
+        names[key] = dialog.ProfileName;
+        if (!SaveWorkspacePreferences(_workspacePreferences with { MouseNames = names })) return;
+        _selectedDevice = _selectedDevice with { Name = dialog.ProfileName };
+        if (_connections.Any(connection => connection.Key == key))
+            ApplyConnectionInventory(_connections);
+        DetailHeading.Text = _selectedDevice.Name;
+        System.Windows.Automation.AutomationProperties.SetName(MappingPage, "Assignments for " + DetailHeading.Text);
+        StatusText.Text = "Mouse name updated.";
     }
     private void AppearanceNav_Click(object sender, RoutedEventArgs e) => ShowPage("appearance");
     private void Quit_Click(object sender, RoutedEventArgs e) => ExitApp();

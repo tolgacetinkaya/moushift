@@ -8,8 +8,8 @@ public partial class MainWindow
     internal void EnterInteractivePreview()
     {
         EngineBadge.Text = "Preview · hardware control off";
-        EnableButton.Content = "Enable Circle";
-        EnableButton.IsEnabled = false;
+        MouseActionsSwitch.IsChecked = false;
+        MouseActionsSwitch.IsEnabled = false;
         StatusText.Text = "Preview · edits save in the preview only";
     }
     private bool _layoutEventsBound;
@@ -105,9 +105,7 @@ public partial class MainWindow
         }
         a.Activity = "Input detected"; b.Activity = "Last input recently";
         EmptyDevicesBox.Visibility = Visibility.Collapsed;
-        EngineBadge.Text = "Circle enabled"; EnableButton.Content = "Pause";
-        EnableButton.Style = (Style)FindResource(typeof(Button));
-        DevicesSubtitle.Text = "2 Windows mouse connections · 1 receiver";
+        EngineBadge.Text = "Preview"; MouseActionsSwitch.IsChecked = true;
         ReceiverConnectionsList.ItemsSource = _deviceCards;
         RefreshBindings(MouseControl.MiddleButton); CloseEditor(); ApplyWorkspaceSizing();
     }
@@ -117,18 +115,6 @@ public partial class MainWindow
         ShowPage(page); ApplyWorkspaceSizing();
     }
     internal void FinishOffscreenWorkspaceLayout() { PlaceMarkers(); }
-    private void CircleTab_Click(object sender, RoutedEventArgs e) => EditRing_Click(sender, e);
-    private void SetInspectorTab(bool circle)
-    {
-        foreach (var (tab, selected) in new[] { (MappingsNav, !circle), (RingNav, circle) })
-        {
-            tab.SetResourceReference(Control.ForegroundProperty, selected ? "Accent" : "Muted");
-            tab.SetResourceReference(Control.BorderBrushProperty, selected ? "Accent" : "ControlEdge");
-            tab.SetResourceReference(Control.BackgroundProperty, selected ? "Selection" : "ControlSurface");
-            tab.BorderThickness = new Thickness(1);
-            tab.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
-        }
-    }
     private void ToggleTheme_Click(object sender, RoutedEventArgs e) => ThemeCombo.SelectedValue = ThemeManager.Current == "light" ? "dark" : "light";
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {

@@ -9,7 +9,8 @@ public partial class MainWindow
 {
     internal void AddThirdDesignDevice()
     {
-        _deviceCards.Add(new("preview:razer", "Razer Mouse Dock Pro", "Razer", "Receiver connected", ThemeManager.Brush("Accent"), "preview:razer"));
+        var connection = new Clickloom.Windows.MouseConnection("preview:razer", "Razer Mouse Dock Pro", "Razer", "USB", true, false, []);
+        _deviceCards.Add(new(connection.Key, connection.DisplayName, connection.Manufacturer, connection.Status, ThemeManager.Brush("Accent"), connection.Key));
         ApplyWorkspaceSizing();
     }
 
@@ -25,6 +26,7 @@ public partial class MainWindow
         }
         UpdateLayout(); PlaceMarkers();
         if (_circleEditor is not null && args.Contains("--folder")) _circleEditor.ShowFolderPreview();
+        if (_circleEditor is not null && args.Contains("--show-circle-colors")) _circleEditor.ShowColorSettings(args.Contains("--show-color-picker"));
         if (_circleEditor is not null && args.Contains("--drag-preview")) { UpdateLayout(); _circleEditor.ShowDragPresentationPreview(); }
         if (args.Contains("--three-devices"))
         {
@@ -34,6 +36,7 @@ public partial class MainWindow
         }
         if (args.Contains("--show-profiles")) ProfilesNav_Click(this, new RoutedEventArgs());
         if (args.Contains("--show-settings")) AppearanceNav_Click(this, new RoutedEventArgs());
+        if (args.Contains("--connection-details")) ConnectionDetails.IsExpanded = true;
     }
 
     internal void PrepareDesignButtonEditor()
@@ -48,6 +51,14 @@ public partial class MainWindow
         if (!_previewOnly || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CLICKLOOM_DATA_DIR")))
             throw new InvalidOperationException("Design checks require isolated data.");
         string original = ThemeManager.Current;
+        DevicesNav.ApplyTemplate();
+        DetailBackButton.ApplyTemplate();
+        ThemeCombo.ApplyTemplate();
+        if (DevicesNav.Template.FindName("Chrome", DevicesNav) is not Border navigationChrome || !FacetedBorder.GetIsFaceted(navigationChrome)
+            || DetailBackButton.Template.FindName("Chrome", DetailBackButton) is not Border pageChrome || FacetedBorder.GetIsFaceted(pageChrome)
+            || ThemeCombo.Template.FindName("PART_Popup", ThemeCombo) is not System.Windows.Controls.Primitives.Popup { Child: Border popupChrome }
+            || FacetedBorder.GetIsFaceted(popupChrome))
+            throw new InvalidOperationException("Only title bar controls should inherit the faceted shape.");
         var a = _deviceCards[0]; var b = _deviceCards[1];
         BackToGallery_Click(this, new RoutedEventArgs()); UpdateLayout();
         if (_selectedDevice is not null || DeviceInspector.Visibility != Visibility.Collapsed || InspectorSplitter.Visibility != Visibility.Collapsed
@@ -84,12 +95,15 @@ public partial class MainWindow
         // Both fixture profiles now exist. Selecting / browsing / theming must be read-only.
         byte[] before = File.ReadAllBytes(_store.FilePath);
         Guid id = EditingProfile.Id;
-        CircleTab_Click(this, new RoutedEventArgs()); UpdateLayout();
+        if (Math.Abs(DeviceDetailPage.TranslatePoint(new Point(), DevicesWorkspace).Y - DeviceInspector.TranslatePoint(new Point(), DevicesWorkspace).Y) > 1)
+            throw new InvalidOperationException("Assignments must start at the top of the button map.");
+        CustomizeCircleButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); UpdateLayout();
         if (CircleWorkspaceHost.Visibility != Visibility.Visible || DevicesWorkspace.Visibility != Visibility.Collapsed || EditingProfile.Id != id || _circleEditor is null)
             throw new InvalidOperationException("Circle did not open in the central workspace for the selected mouse.");
         _circleEditor.VerifyHostedSurface();
         if (!TryCloseCircleEditor()) throw new InvalidOperationException("Unchanged Circle could not close.");
-        MappingsNav_Click(this, new RoutedEventArgs());
+        if (CircleWorkspaceHost.Visibility != Visibility.Collapsed || DevicesWorkspace.Visibility != Visibility.Visible || EditingProfile.Id != id)
+            throw new InvalidOperationException("Back from Customize Circle did not restore this mouse's assignments.");
         var preferences = _workspacePreferences;
         ToggleSidebar_Click(this, new RoutedEventArgs()); UpdateLayout();
         if ((Visibility)Resources["SidebarLabelVisibility"] != Visibility.Collapsed)
@@ -101,6 +115,13 @@ public partial class MainWindow
         var folder = Path.Combine(Path.GetDirectoryName(_store.FilePath)!, "layout-fixture");
         _workspacePreferences.Save(folder);
         if (WorkspacePreferences.Load(folder) != _workspacePreferences) throw new InvalidOperationException("Workspace layout did not survive reload.");
+        foreach (bool on in new[] { true, false })
+        {
+            (_workspacePreferences with { MouseActionsEnabled = on }).Save(folder);
+            var restored = WorkspacePreferences.Load(folder);
+            if (restored.MouseActionsEnabled != on || restored.InspectorWidth != 490)
+                throw new InvalidOperationException("Mouse actions or inspector width did not survive reload.");
+        }
         _workspacePreferences = preferences; ApplyWorkspaceSizing();
         ShowButtonPositions(); UpdateLayout(); PlaceMarkers();
         if (DeviceDetailPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Collapsed || DiagramStage.ActualWidth < 300)

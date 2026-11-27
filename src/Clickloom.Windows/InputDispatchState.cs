@@ -45,14 +45,3 @@ internal sealed class InputGestureLedger<TKey> where TKey : notnull
     }
     public bool Release(TKey input, out InputGesture gesture) => _held.Remove(input, out gesture!);
 }
-
-internal static class AuxiliaryInputFilter
-{
-    public static bool ShouldObserve(uint virtualKey, uint flags, nuint extraInfo)
-    {
-        // Vendor software may inject an explicitly opted-in F13-F24 source.
-        // Only our own tagged output is excluded; the source device is unknown.
-        _ = flags;
-        return virtualKey is >= 0x7C and <= 0x87 && extraInfo != NativeMethods.InjectionMarker;
-    }
-}

@@ -12,6 +12,21 @@ public static class SettingsValidator
         var errors = new List<string>();
         if (settings is null) return ["Settings cannot be empty."];
         if (settings.SchemaVersion != 1) errors.Add("Unsupported settings schema.");
+        if (settings.MyActions is { } myActions)
+        {
+            if (myActions.Count > CustomCircleAction.MaximumActions)
+                errors.Add($"Save up to {CustomCircleAction.MaximumActions} items in My Actions.");
+            else
+            {
+                var ids = new HashSet<Guid>();
+                foreach (var action in myActions)
+                {
+                    if (action is null || action.Id == Guid.Empty || !ids.Add(action.Id))
+                        errors.Add("My Actions require unique identifiers.");
+                    else errors.AddRange(ValidateMyAction(action.Slot));
+                }
+            }
+        }
         if (settings.Profiles is null || settings.Profiles.Count == 0)
             return [.. errors, "At least one global profile is required."];
         if (settings.Profiles.Count > MaximumProfiles) errors.Add($"A maximum of {MaximumProfiles} profiles is supported.");
@@ -56,6 +71,14 @@ public static class SettingsValidator
             }
             if (profile.RingSlots is null || profile.RingSlots.Count != 8) errors.Add("Action Ring must contain eight segments.");
             else ValidateRing(profile.RingSlots, 0, new HashSet<RingSlot>(ReferenceEqualityComparer.Instance), errors);
+            if (profile.DirectionalCircle is { } directions)
+            {
+                if (profile.DeviceKey is null) errors.Add("Quick gestures require a device profile.");
+                if (directions is { Left: null, Right: null, Up: null, Down: null })
+                    errors.Add("Quick gestures require at least one shortcut.");
+                foreach (var shortcut in new[] { directions.Left, directions.Right, directions.Up, directions.Down })
+                    if (shortcut is not null) ValidateAction(shortcut.ToAction(), errors);
+            }
             if (profile.Bindings is null) { errors.Add("Profile bindings cannot be null."); continue; }
             if (profile.LearnedBindings is null || profile.LearnedBindings.Count > 256) errors.Add("Invalid learned assignments.");
             else
@@ -106,6 +129,15 @@ public static class SettingsValidator
             if (!visited.Add(slot)) { errors.Add("Ring folders cannot contain cycles or shared segments."); continue; }
             if (string.IsNullOrWhiteSpace(slot.Name) || slot.Name.Length > 48) errors.Add("Ring action names must contain 1–48 characters.");
             if (!Enum.IsDefined(slot.Kind)) errors.Add("Unsupported ring segment type.");
+            if (slot.Outline is { } outline)
+            {
+                if (!double.IsFinite(outline.Thickness) || outline.Thickness is < RingOutline.MinimumThickness or > RingOutline.MaximumThickness)
+                    errors.Add($"Circle outline width must be between {RingOutline.MinimumThickness} and {RingOutline.MaximumThickness}.");
+                if (outline.Colors is not { Count: >= 1 and <= RingOutline.MaximumColors }
+                    || outline.Colors.Any(color => color is not { Length: 7 } || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit)))
+                    errors.Add($"A Circle outline needs 1–{RingOutline.MaximumColors} colors in #RRGGBB format.");
+            }
+            ValidateSequence(slot, errors);
             foreach (var action in new[] { slot.Action, slot.DecreaseAction, slot.IncreaseAction })
             {
                 ValidateAction(action, errors);
@@ -148,7 +180,40 @@ public static class SettingsValidator
             errors.Add("Choose a Circle profile for this mouse.");
     }
 
-    private static bool IsAbsolutePath(string value) => !string.IsNullOrWhiteSpace(value)
+    public static IReadOnlyList<string> ValidateMyAction(RingSlot? slot)
+    {
+        if (slot is not { Kind: RingSlotKind.Command, Action: { } action } || !string.IsNullOrEmpty(slot.DefinitionId)
+            || slot.Icon is null || slot.Icon.Length > 8 || slot.Children is not { Count: 0 })
+            return ["Choose a valid command for My Actions."];
+
+        var errors = new List<string>();
+        if (slot.Sequence is null && action.Kind is not (ActionKind.Shortcut or ActionKind.LaunchApplication or ActionKind.OpenResource))
+            errors.Add("Choose a shortcut, application, or file.");
+        if (action.Kind == ActionKind.LaunchApplication && !string.IsNullOrEmpty(action.Arguments))
+            errors.Add("Application actions in My Actions do not accept command-line arguments.");
+        if (action.Kind == ActionKind.OpenResource && !IsAbsolutePath(action.ApplicationPath))
+            errors.Add("Choose an absolute file path.");
+        ValidateRing([slot], 0, new HashSet<RingSlot>(ReferenceEqualityComparer.Instance), errors);
+        return errors;
+    }
+
+    private static void ValidateSequence(RingSlot slot, List<string> errors)
+    {
+        if (slot.Sequence is not { } steps) return;
+        if (slot.Kind != RingSlotKind.Command || slot.Action?.Kind != ActionKind.Disabled
+            || steps.Count is < CustomCircleAction.MinimumSteps or > CustomCircleAction.MaximumSteps)
+        {
+            errors.Add($"A shortcut sequence needs {CustomCircleAction.MinimumSteps}–{CustomCircleAction.MaximumSteps} steps.");
+            return;
+        }
+        foreach (var step in steps)
+        {
+            if (step?.Kind != ActionKind.Shortcut) errors.Add("Sequences can include only keyboard shortcuts.");
+            else ValidateAction(step, errors);
+        }
+    }
+
+    private static bool IsAbsolutePath(string? value) => !string.IsNullOrWhiteSpace(value)
         && value.Length <= 32_767 && !value.Contains('\0') && Path.IsPathFullyQualified(value);
 
     public static bool IsOpenResource(string? value) => value is not null && value.Length <= 32767 && !value.Contains('\0')

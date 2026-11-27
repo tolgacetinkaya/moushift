@@ -9,16 +9,15 @@ namespace Clickloom.Windows;
 /// <summary>Device-specific Circle routing with middle-click replacement and optional exclusive remapping. Starts disarmed.</summary>
 public sealed partial class MouseRemappingService : IDisposable
 {
-    private sealed record RoutingSnapshot(string Name, Dictionary<MouseControl, InputAction> Actions, Dictionary<int, InputAction> AuxiliaryKeys, bool OwnWindow, long Generation, nint ForegroundWindow)
+    private sealed record RoutingSnapshot(string Name, Dictionary<MouseControl, InputAction> Actions, bool OwnWindow, long Generation, nint ForegroundWindow)
     { public MappingProfile? Profile { get; init; } public string? ApplicationPath { get; init; } }
-    private sealed record Work(InputAction Action, bool IsRelease, bool IsHold, long Token, long Epoch, long RoutingGeneration, nint ForegroundWindow, MappingProfile? Profile = null, bool DriverlessCircle = false);
+    private sealed record Work(InputAction Action, bool IsRelease, bool IsHold, long Token, long Epoch, long RoutingGeneration, nint ForegroundWindow, MappingProfile? Profile = null, bool DriverlessCircle = false,
+        IReadOnlyList<InputAction>? Sequence = null);
     private readonly ConcurrentQueue<Work> _queue = new();
     private readonly ConcurrentQueue<MouseControl> _observations = new();
-    private readonly ConcurrentQueue<int> _auxiliaryObservations = new();
     private readonly AutoResetEvent _wake = new(false);
     private readonly ManualResetEventSlim _ready = new(false);
     private readonly InputGestureLedger<MouseControl> _gestures = new(); // Hook-thread ownership only.
-    private readonly InputGestureLedger<int> _keyGestures = new(); // F13-F24 only; no ordinary key capture.
     private readonly InputGestureLedger<(string, MouseControl)> _deviceGestures = new();
     private readonly Dictionary<(string, bool), (DispatchStamp Stamp, int Delta)> _deviceWheels = new();
     private InterceptionBackend? _deviceBackend;
@@ -32,12 +31,14 @@ public sealed partial class MouseRemappingService : IDisposable
     private readonly NativeMethods.HookProc _hookProc;
     private readonly NativeMethods.HookProc _keyboardProc;
     private AppSettings _settings = AppSettings.CreateDefault();
-    private RoutingSnapshot _snapshot = new("Global", new(), new(), false, 0, 0);
+    private RoutingSnapshot _snapshot = new("Global", new(), false, 0, 0);
     private Thread? _hookThread, _workerThread;
     private Timer? _foregroundTimer;
     private nint _hook, _keyboardHook;
     private uint _hookThreadId;
-    private volatile bool _enabled, _running, _disposed, _stopping;
+    private readonly AssignmentActivation _activation;
+    private bool _enabled => _activation.IsEnabled;
+    private volatile bool _running, _disposed, _stopping;
     private long _token, _settingsRevision;
     private int _queueCount, _observationCount, _polling;
     private int _wheelVertical, _wheelHorizontal;
@@ -58,7 +59,12 @@ public sealed partial class MouseRemappingService : IDisposable
     private RingBounds _ringBounds = new(0, 0, 0, 0);
 
     private readonly string? _deviceLibrary;
-    public MouseRemappingService(string? deviceLibrary = null) { _deviceLibrary = deviceLibrary; _hookProc = HookCallback; _keyboardProc = KeyboardCallback; }
+    public MouseRemappingService(string? deviceLibrary = null, bool? mouseActionsEnabled = null)
+    {
+        _activation = new(mouseActionsEnabled);
+        _deviceLibrary = deviceLibrary; _hookProc = HookCallback; _keyboardProc = KeyboardCallback;
+    }
+    public bool? MouseActionsEnabled => _activation.Preference;
     public bool IsEnabled => _enabled;
     public bool IsRunning => _running;
     private string _inputStatus = "No mouse button detected yet.";
@@ -74,29 +80,38 @@ public sealed partial class MouseRemappingService : IDisposable
     public void UpdateDeviceInventory(IReadOnlyList<MouseConnection> connections)
     {
         bool rawChanged;
-        lock (_settingsGate) rawChanged = _rawCircles.Update(connections);
+        lock (_settingsGate)
+        {
+            rawChanged = _rawCircles.Update(connections);
+            if (rawChanged) UpdateSideCapturePolicy();
+        }
         var paths = connections.SelectMany(c => c.DevicePaths).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        bool releaseMiddle;
-        lock (_middleGateLock) releaseMiddle = _middleGate.RemoveSources(paths);
-        if (releaseMiddle) QueueMiddleReplay(false, 0);
+        lock (_buttonGateLock)
+        {
+            foreach (var (control, gate) in _buttonGates)
+                if (gate.RemoveSources(paths)) QueueButtonReplay(control, false, 0);
+            if (rawChanged) ClearDirectionalCircles();
+        }
         var next = DeviceRouteTable.Build(DeviceSources, connections);
         var previous = Volatile.Read(ref _deviceRoutes);
         if (previous.SameAs(next) && !rawChanged) return;
         Volatile.Write(ref _deviceRoutes, next); _dispatchState.AdvanceRouting();
+        if (!CanEnable) SuspendDeviceActions();
+        RefreshButtonGates();
         DismissRing();
+        RaiseStateChanged();
     }
     public void InvalidateDeviceRoutes()
     {
-        ResetMiddleGate();
+        ResetButtonGates();
         lock (_settingsGate) _rawCircles.Update([]);
         Volatile.Write(ref _deviceRoutes, DeviceRouteTable.Empty);
-        if (_enabled) SetEnabled(false);
+        SuspendDeviceActions();
         _dispatchState.AdvanceRouting();
     }
     public event EventHandler? StateChanged;
     public event EventHandler<string>? ActionError;
     public event EventHandler<MouseControl>? InputObserved;
-    public event EventHandler<int>? AuxiliaryInputObserved;
     public event EventHandler<RingRequest>? RingRequested;
     public event EventHandler<Guid>? RingTriggerReleased;
     public event EventHandler<RingPointerRequest>? RingClicked;
@@ -129,6 +144,13 @@ public sealed partial class MouseRemappingService : IDisposable
     public void SetRingBounds(int left, int top, int width, int height) => Volatile.Write(ref _ringBounds, new(left, top, left + width, top + height));
     public void DismissRing()
         => DismissRing("application/selection");
+    public void DismissRing(Guid requestId)
+    {
+        var request = Volatile.Read(ref _ringRequest);
+        if (request?.Id != requestId || !ReferenceEquals(Interlocked.CompareExchange(ref _ringRequest, null, request), request)) return;
+        TraceCircle("close", "application/selection");
+        NotifyRingDismissed();
+    }
     private void DismissRing(string reason)
     {
         if (Interlocked.Exchange(ref _ringRequest, null) is not null)
@@ -147,13 +169,17 @@ public sealed partial class MouseRemappingService : IDisposable
         if (request is null || request.Id != requestId) return false;
         if (!RingActionSelection.TryResolve(request, invocation, out var action, out bool close)) return false;
         var stamp = _dispatchState.Current;
-        if (!RingActionSelection.CanDispatch(request, stamp, _enabled, NativeMethods.GetForegroundWindow())) { DismissRing(); return false; }
+        if (!RingActionSelection.CanDispatch(request, stamp, _enabled, NativeMethods.GetForegroundWindow())) { DismissRing(request.Id); return false; }
         if (close)
         {
             if (!ReferenceEquals(Interlocked.CompareExchange(ref _ringRequest, null, request), request)) return false;
             NotifyRingDismissed();
         }
         else if (!IsCurrentRing(request.Id)) return false;
+        var sequence = close ? RingNavigation.Resolve(request.Slots, invocation.Path)?.Sequence : null;
+        if (sequence is not null)
+            return Enqueue(new(action.DeepClone(), false, false, Interlocked.Increment(ref _token), stamp.EnableEpoch,
+                stamp.RoutingGeneration, request.TargetWindow, Sequence: sequence.Select(step => step.DeepClone()).ToArray()));
         if (action.Kind is ActionKind.Ring or ActionKind.Passthrough or ActionKind.Disabled) return true;
         if (action.Kind is ActionKind.SelectCircleProfile or ActionKind.ToggleCircleAdapt)
         {
@@ -217,7 +243,7 @@ public sealed partial class MouseRemappingService : IDisposable
         try { _deviceBackend?.Start(ProcessDeviceInput); }
         catch
         {
-            _stopping = true; _enabled = false; _wake.Set();
+            _stopping = true; _activation.Pause(); _wake.Set();
             NativeMethods.PostThreadMessage(_hookThreadId, NativeMethods.WmQuit, 0, 0);
             _hookThread.Join(TimeSpan.FromSeconds(3)); _workerThread.Join(TimeSpan.FromSeconds(3));
             throw;
@@ -234,24 +260,69 @@ public sealed partial class MouseRemappingService : IDisposable
         lock (_settingsGate)
         {
             _settings = settings.DeepClone();
+            UpdateSideCapturePolicy();
             _settingsRevision++;
             _dispatchState.AdvanceRouting();
         }
+        RefreshButtonGates();
         PollForeground(null);
     }
 
-    public void SetEnabled(bool enabled)
+    public AppliedBindingStatus StartAppliedBinding(string deviceKey, MouseControl input, InputAction action)
+    {
+        if (action.Kind == ActionKind.Passthrough || (!CanRouteDevice(deviceKey)
+            && !(CanTriggerCircleForDevice(deviceKey) && RawCircleRouter.SupportsAction(input, action))))
+            return AppliedBindingStatus.Unavailable;
+        SetEnabled(true, onlyFromStartup: true);
+        return _enabled ? AppliedBindingStatus.Active : AppliedBindingStatus.Paused;
+    }
+
+    public void SetMouseActions(bool on)
+    {
+        if (!on) { SetEnabled(false); return; }
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _activation.RequestOn();
+        ResumeWhenReady();
+    }
+
+    public void ResumeWhenReady()
+    {
+        if (_activation.IsWaiting && _running && CanEnable)
+            SetEnabled(true, onlyFromStartup: true);
+    }
+
+    private void SuspendDeviceActions()
+    {
+        if (!_activation.Suspend()) return;
+        DismissRing();
+        _dispatchState.AdvanceEnableEpoch();
+        RefreshButtonGates();
+        _wake.Set();
+        RaiseStateChanged();
+    }
+
+    public void SetEnabled(bool enabled) => SetEnabled(enabled, onlyFromStartup: false);
+
+    private void SetEnabled(bool enabled, bool onlyFromStartup)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (enabled && !_running) throw new InvalidOperationException(_lastError ?? "The hook and emergency hotkey must be available before remapping is enabled.");
         if (enabled && !CanEnable) throw new InvalidOperationException("Connect a mouse and wait for Raw Input to be ready. Exclusive remapping requires optional device input support.");
         if (enabled && _deviceBackend is not null && !_deviceBackend.IsCapturing) throw new InvalidOperationException("The device input backend stopped. Restart before enabling it.");
-        if (_enabled == enabled) return;
-        if (!enabled) _enabled = false;
-        if (!enabled) DismissRing();
-        _dispatchState.AdvanceEnableEpoch();
-        if (enabled) { _lastError = null; _enabled = true; }
-        RefreshMiddleGate();
+        if (enabled)
+        {
+            if (_enabled || (onlyFromStartup && _activation.IsPaused)) return;
+            _dispatchState.AdvanceEnableEpoch();
+            if (!_activation.Enable(onlyFromStartup)) return;
+            _lastError = null;
+        }
+        else
+        {
+            if (!_activation.Pause()) return;
+            DismissRing();
+            _dispatchState.AdvanceEnableEpoch();
+        }
+        RefreshButtonGates();
         _wake.Set();
         RaiseStateChanged();
     }
@@ -272,7 +343,7 @@ public sealed partial class MouseRemappingService : IDisposable
             _hook = NativeMethods.SetWindowsHookEx(NativeMethods.WhMouseLl, _hookProc, NativeMethods.GetModuleHandle(null), 0);
             if (_hook == 0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows could not install the mouse hook.");
             _keyboardHook = NativeMethods.SetWindowsHookEx(13, _keyboardProc, NativeMethods.GetModuleHandle(null), 0);
-            if (_keyboardHook == 0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows could not install the optional F13-F24 input hook.");
+            if (_keyboardHook == 0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows could not install the keyboard hook for shortcut capture and Circle dismissal.");
             _running = true;
             _ready.Set();
             RaiseStateChanged();
@@ -283,7 +354,7 @@ public sealed partial class MouseRemappingService : IDisposable
                 if (result < 0) throw new Win32Exception(Marshal.GetLastWin32Error(), "The input message loop failed.");
                 if (message.Id == NativeMethods.WmHotKey && message.WParam == 0x434C)
                 {
-                    _enabled = false;
+                    _activation.Pause();
                     DismissRing("pause hotkey");
                     _dispatchState.AdvanceEnableEpoch();
                     _wake.Set();
@@ -299,14 +370,14 @@ public sealed partial class MouseRemappingService : IDisposable
             _lastError = exception is Win32Exception nativeError
                 ? $"{nativeError.Message} (Windows error {nativeError.NativeErrorCode})"
                 : exception.Message;
-            _enabled = false;
+            _activation.Pause();
             _dispatchState.AdvanceEnableEpoch();
             _wake.Set();
         }
         finally
         {
             _running = false;
-            _enabled = false;
+            _activation.Pause();
             _dispatchState.AdvanceEnableEpoch();
             if (_hook != 0)
             {
@@ -315,7 +386,7 @@ public sealed partial class MouseRemappingService : IDisposable
             }
             if (_keyboardHook != 0)
             {
-                if (!NativeMethods.UnhookWindowsHookEx(_keyboardHook)) _lastError = "Windows reported an auxiliary-key-hook cleanup failure.";
+                if (!NativeMethods.UnhookWindowsHookEx(_keyboardHook)) _lastError = "Windows reported a keyboard-hook cleanup failure.";
                 _keyboardHook = 0;
             }
             if (hotkeyRegistered) NativeMethods.UnregisterHotKey(0, 0x434C);
@@ -349,7 +420,7 @@ public sealed partial class MouseRemappingService : IDisposable
                         bool emergency = decision.KeyCode == _emergencyKey && decision.Modifiers == (KeyModifiers.Control | KeyModifiers.Alt);
                         bool cancelled = decision.Cancelled || emergency;
                         if (cancelled) EndShortcutCapture(session.Id);
-                        if (emergency) { _enabled = false; _dispatchState.AdvanceEnableEpoch(); DismissRing(); RaiseStateChanged(); }
+                        if (emergency) { _activation.Pause(); _dispatchState.AdvanceEnableEpoch(); DismissRing(); RaiseStateChanged(); }
                         if (Interlocked.Increment(ref _observationCount) <= 64 || cancelled)
                         { _captureUpdates.Enqueue(new(session.Id, decision.KeyCode, decision.Modifiers, cancelled)); _wake.Set(); }
                         else Interlocked.Decrement(ref _observationCount);
@@ -363,42 +434,8 @@ public sealed partial class MouseRemappingService : IDisposable
                 if ((uint)wParam is 0x100 or 0x104 && _ringEscapeDown) return 1;
                 if ((uint)wParam is 0x100 or 0x104 && IsRingOpen) { _ringEscapeDown = true; DismissRing(); return 1; }
             }
-            if (!AuxiliaryInputFilter.ShouldObserve(data.VirtualKey, data.Flags, data.ExtraInfo))
-                return NativeMethods.CallNextHookEx(_keyboardHook, code, wParam, lParam);
-            var key = (int)data.VirtualKey;
-            var message = (uint)wParam;
-            if (message is 0x101 or 0x105)
-            {
-                if (_keyGestures.Release(key, out var gesture) && gesture.Suppressed)
-                {
-                    ReleaseRingTrigger(gesture);
-                    if (gesture.Action?.Kind == ActionKind.MouseButton && IsButton(gesture.Action.MouseOutput))
-                        if (!Enqueue(new Work(gesture.Action, true, true, gesture.Token, gesture.Epoch, 0, 0))) DisarmFromHook("The auxiliary release queue was full; Moushift paused.");
-                    return 1;
-                }
-            }
-            else if (message is 0x100 or 0x104)
-            {
-                if (_keyGestures.TryGet(key, out var existing))
-                    return existing.Suppressed ? 1 : NativeMethods.CallNextHookEx(_keyboardHook, code, wParam, lParam);
-                if (Interlocked.Increment(ref _observationCount) <= 32) { _auxiliaryObservations.Enqueue(key); _wake.Set(); }
-                else Interlocked.Decrement(ref _observationCount);
-                var snapshot = Volatile.Read(ref _snapshot);
-                var stamp = _dispatchState.Current;
-                var epoch = stamp.EnableEpoch;
-                if (!_enabled || snapshot.Generation != stamp.RoutingGeneration || snapshot.OwnWindow || !snapshot.AuxiliaryKeys.TryGetValue(key, out var action) || action.Kind == ActionKind.Passthrough)
-                    _keyGestures.Begin(key, new(false, null, epoch, 0));
-                else
-                {
-                    var token = Interlocked.Increment(ref _token);
-                    if (action.Kind == ActionKind.Disabled || Enqueue(new(action, false, action.Kind == ActionKind.MouseButton && IsButton(action.MouseOutput), token, epoch, snapshot.Generation, snapshot.ForegroundWindow)))
-                    { _keyGestures.Begin(key, new(true, action, epoch, token)); return 1; }
-                    _keyGestures.Begin(key, new(false, null, epoch, 0));
-                    DisarmFromHook("The auxiliary action queue was full; Moushift paused.");
-                }
-            }
         }
-        catch (Exception exception) { DisarmFromHook("Auxiliary input processing paused: " + exception.Message); }
+        catch (Exception exception) { DisarmFromHook("Keyboard hook processing paused: " + exception.Message); }
         return NativeMethods.CallNextHookEx(_keyboardHook, code, wParam, lParam);
     }
 
@@ -420,10 +457,10 @@ public sealed partial class MouseRemappingService : IDisposable
             if (HasDeviceRouting) return NativeMethods.CallNextHookEx(_hook, code, wParam, lParam);
             var message = (uint)wParam;
             var control = DecodeButton(message, data.MouseData, out var isUp);
-            if (control == MouseControl.MiddleButton && BlockNativeMiddle(!isUp))
+            if (control is { } gated && _buttonGates.ContainsKey(gated) && BlockNativeButton(gated, !isUp))
             {
-                if (!isUp) Observe(MouseControl.MiddleButton);
-                TraceCircle("block-native-middle", "raw source routing", control.ToString(), !isUp);
+                if (!isUp) Observe(gated);
+                TraceCircle(gated == MouseControl.MiddleButton ? "block-native-middle" : "block-native-side", "raw source routing", gated.ToString(), !isUp);
                 return 1;
             }
             if (control is not null)
@@ -641,8 +678,8 @@ public sealed partial class MouseRemappingService : IDisposable
     {
         DismissRing();
         _lastError = error;
-        _enabled = false;
-        lock (_middleGateLock) _middleGate.Request(false);
+        _activation.Pause();
+        lock (_buttonGateLock) foreach (var gate in _buttonGates.Values) gate.Request(false);
         _dispatchState.AdvanceEnableEpoch();
         _wake.Set();
         RaiseStateChanged();
@@ -651,29 +688,43 @@ public sealed partial class MouseRemappingService : IDisposable
     private void WorkerLoop()
     {
         var epoch = _dispatchState.Current.EnableEpoch;
+        long nextCleanupAttempt = 0;
         try
         {
             while (!_stopping)
             {
-                DrainMiddleReplays();
-                while (_captureUpdates.TryDequeue(out var captured))
+                DrainButtonReplays();
+                // Bound each drain so new input cannot starve actions or shutdown.
+                for (int count = 0; count < 32 && !_stopping && _captureUpdates.TryDequeue(out var captured); count++)
                 {
                     Interlocked.Decrement(ref _observationCount);
                     try { ShortcutCaptured?.Invoke(this, captured); } catch { }
                 }
                 var currentEpoch = _dispatchState.Current.EnableEpoch;
-                if (epoch != currentEpoch) { ReleaseHeldOutputs(); epoch = currentEpoch; }
-                while (_observations.TryDequeue(out var observed))
+                if (epoch != currentEpoch)
+                {
+                    ReleaseHeldOutputs();
+                    epoch = currentEpoch;
+                    nextCleanupAttempt = Environment.TickCount64 + 500;
+                }
+                else if (!_enabled && (_pendingOneShotInputs.Count != 0 || _outputOwners.Count != 0)
+                    && Environment.TickCount64 >= nextCleanupAttempt)
+                {
+                    ReleaseHeldOutputs(reportError: false);
+                    nextCleanupAttempt = Environment.TickCount64 + 500;
+                }
+                for (int count = 0; count < 32 && !_stopping && _observations.TryDequeue(out var observed); count++)
                 {
                     Interlocked.Decrement(ref _observationCount);
                     try { InputObserved?.Invoke(this, observed); } catch { /* Consumer failures cannot disable input cleanup. */ }
                 }
-                while (_auxiliaryObservations.TryDequeue(out var observedKey))
+                if (_stopping) break;
+                if (!_queue.TryDequeue(out var work))
                 {
-                    Interlocked.Decrement(ref _observationCount);
-                    try { AuxiliaryInputObserved?.Invoke(this, observedKey); } catch { }
+                    if (_captureUpdates.IsEmpty && _observations.IsEmpty)
+                        _wake.WaitOne(100);
+                    continue;
                 }
-                if (!_queue.TryDequeue(out var work)) { _wake.WaitOne(100); continue; }
                 Interlocked.Decrement(ref _queueCount);
                 if (!InputDispatchState.CanExecute(new(work.Epoch, work.RoutingGeneration), _dispatchState.Current, _enabled, work.IsRelease))
                 { Volatile.Write(ref _inputStatus, "Action cancelled: enable state or profile changed."); continue; }
@@ -687,7 +738,7 @@ public sealed partial class MouseRemappingService : IDisposable
                 {
                     DismissRing();
                     _lastError = exception.Message;
-                    _enabled = false;
+                    _activation.Pause();
                     _dispatchState.AdvanceEnableEpoch();
                     ReleaseHeldOutputs();
                     try { ActionError?.Invoke(this, _lastError ?? exception.Message); } catch { }
@@ -698,12 +749,18 @@ public sealed partial class MouseRemappingService : IDisposable
         finally
         {
             ReleaseHeldOutputs();
-            try { ReleaseNativeMiddle(); } catch (Exception error) { _lastError = error.Message; }
+            try { ReleaseNativeButtons(); } catch (Exception error) { _lastError = error.Message; }
         }
     }
 
     private void Execute(Work work)
     {
+        if (work.Sequence is { } sequence)
+        {
+            ExecuteSequence(work, sequence);
+            return;
+        }
+
         var action = work.Action;
         switch (action.Kind)
         {
@@ -720,6 +777,12 @@ public sealed partial class MouseRemappingService : IDisposable
                 _ringWheelRemainder = 0;
                 Volatile.Write(ref _ringBounds, new(0, 0, 0, 0));
                 Volatile.Write(ref _ringRequest, request);
+                // Opening and pausing can race across the action worker and UI threads.
+                if (!RingActionSelection.CanDispatch(request, _dispatchState.Current, _enabled, NativeMethods.GetForegroundWindow()))
+                {
+                    DismissRing(request.Id);
+                    break;
+                }
                 TraceCircle("open", profile.DeviceName ?? "Mouse");
                 if (work.DriverlessCircle) Interlocked.Increment(ref _rawCircleTriggerCount);
                 try { RingRequested?.Invoke(this, request); } catch { DismissRing(); throw; }
@@ -767,15 +830,18 @@ public sealed partial class MouseRemappingService : IDisposable
         _heldOutputs.Remove(token);
     }
 
-    private void ReleaseHeldOutputs()
+    private void ReleaseHeldOutputs(bool reportError = true)
     {
         var cleanupFailed = false;
         var cleanupError = TryReleaseOneShotInputs();
         if (cleanupError is not null)
         {
             cleanupFailed = true;
-            _lastError = (_lastError is null ? "" : _lastError + " ") + cleanupError;
-            try { ActionError?.Invoke(this, _lastError); } catch { }
+            if (reportError)
+            {
+                _lastError = cleanupError;
+                try { ActionError?.Invoke(this, _lastError); } catch { }
+            }
         }
         foreach (var output in _outputOwners.Keys.ToArray())
         {
@@ -783,12 +849,36 @@ public sealed partial class MouseRemappingService : IDisposable
             catch (Exception exception)
             {
                 cleanupFailed = true;
-                _lastError = "An output release failed: " + exception.Message;
-                try { ActionError?.Invoke(this, _lastError); } catch { }
+                if (reportError)
+                {
+                    _lastError = "An output release failed: " + exception.Message;
+                    try { ActionError?.Invoke(this, _lastError); } catch { }
+                }
             }
         }
         foreach (var token in _heldOutputs.Where(item => !_outputOwners.ContainsKey(item.Value)).Select(item => item.Key).ToArray()) _heldOutputs.Remove(token);
-        if (cleanupFailed) { _enabled = false; RaiseStateChanged(); }
+        if (cleanupFailed && reportError) { _activation.Pause(); RaiseStateChanged(); }
+    }
+
+    private void ExecuteSequence(Work work, IReadOnlyList<InputAction> steps)
+    {
+        if (steps.Count is < CustomCircleAction.MinimumSteps or > CustomCircleAction.MaximumSteps
+            || steps.Any(step => step.Kind != ActionKind.Shortcut)) return;
+
+        var stamp = new DispatchStamp(work.Epoch, work.RoutingGeneration);
+        for (int index = 0; index < steps.Count; index++)
+        {
+            if (_stopping || !InputDispatchState.CanExecute(stamp, _dispatchState.Current, _enabled, isRelease: false)
+                || NativeMethods.GetForegroundWindow() != work.ForegroundWindow)
+            {
+                Volatile.Write(ref _inputStatus, "Shortcut sequence stopped because its target or profile changed.");
+                return;
+            }
+            SendShortcut(steps[index]);
+            // Let Windows process the prior shortcut before checking its target for the next step.
+            if (index < steps.Count - 1) Thread.Sleep(40);
+        }
+        Volatile.Write(ref _inputStatus, "Shortcut sequence sent to Windows.");
     }
 
     private void SendShortcut(InputAction action)
@@ -894,7 +984,7 @@ public sealed partial class MouseRemappingService : IDisposable
             string name;
             lock (_settingsGate)
             {
-                var profile = ProfileResolver.Resolve(_settings, path).DeepClone();
+                var profile = ProfileResolver.Resolve(_settings, path);
                 name = "Device profiles";
                 var stamp = _dispatchState.UpdateRouting(new(hwnd, pid, path, profile.Id, _settingsRevision));
                 var previous = Volatile.Read(ref _snapshot);
@@ -902,10 +992,9 @@ public sealed partial class MouseRemappingService : IDisposable
                 // or settings identity actually changes.
                 if (previous.Generation != stamp.RoutingGeneration)
                 {
-                    // Anonymous mouse/keyboard-hook input must never execute shared mappings.
+                    // Anonymous mouse-hook input must never execute shared mappings.
                     var actions = new Dictionary<MouseControl, InputAction>();
-                    var auxiliary = new Dictionary<int, InputAction>();
-                    Volatile.Write(ref _snapshot, new(name, actions, auxiliary, ownWindow, stamp.RoutingGeneration, hwnd) { Profile = profile, ApplicationPath = path });
+                    Volatile.Write(ref _snapshot, new(name, actions, ownWindow, stamp.RoutingGeneration, hwnd) { Profile = profile.DeepClone(), ApplicationPath = path });
                     if (Volatile.Read(ref _ringRequest) is { } ring && ring.RoutingGeneration != stamp.RoutingGeneration) DismissRing("foreground/settings changed");
                 }
             }
@@ -913,7 +1002,7 @@ public sealed partial class MouseRemappingService : IDisposable
             var changed = _foreground != display || _activeProfile != name;
             _foreground = display;
             _activeProfile = name;
-            RefreshMiddleGate();
+            RefreshButtonGates();
             if (changed) RaiseStateChanged();
         }
         catch (Exception exception) { _lastError = "Profile lookup failed: " + exception.Message; }
@@ -964,10 +1053,10 @@ public sealed partial class MouseRemappingService : IDisposable
         _disposed = true;
         Volatile.Write(ref _captureSession, null);
         DismissRing();
-        _enabled = false;
+        _activation.Pause();
         _dispatchState.AdvanceEnableEpoch();
         _foregroundTimer?.Dispose();
-        ResetMiddleGate();
+        ResetButtonGates();
         _stopping = true;
         try { _deviceBackend?.Dispose(); } catch (Exception error) { _lastError = error.Message; }
         _wake.Set();
@@ -975,7 +1064,7 @@ public sealed partial class MouseRemappingService : IDisposable
         var hookStopped = _hookThread is null || _hookThread.Join(TimeSpan.FromSeconds(3));
         var workerStopped = _workerThread is null || _workerThread.Join(TimeSpan.FromSeconds(3));
         if (!hookStopped || !workerStopped) _lastError = "An input thread is still finishing cleanup.";
-        if (hookStopped && workerStopped) { _wake.Dispose(); _ready.Dispose(); _rawMiddleArrived.Dispose(); }
+        if (hookStopped && workerStopped) { _wake.Dispose(); _ready.Dispose(); }
         RaiseStateChanged();
     }
 }

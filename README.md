@@ -26,13 +26,13 @@ A Windows mouse configuration workspace with per-connection profiles, an editabl
 | Button learning | Removed from the app; existing saved identities, positions and bindings are retained |
 | Firmware-only buttons | Cannot be learned when no accessible event is emitted |
 | Physical button location | Standard markers and previously saved positions; HID does not supply universal diagram coordinates |
-| Driverless mouse actions | Click Circle on standard buttons and horizontal tilt, plus Task View on standard buttons. Assigned middle clicks replace native clicks. |
+| Driverless mouse actions | Click Circle on standard buttons and horizontal tilt, Task View on standard buttons, and keyboard shortcuts on Back and Forward. Assigned middle clicks and Back/Forward keyboard shortcuts replace the native click. |
 | Standard live remapping | Optional Interception backend for exclusive remapping; separate installation and verified source routing |
 | Arbitrary learned HID remapping | Not implemented; assignments are explicitly stored as inactive drafts |
 | Receiver identity | A receiver may represent multiple devices; its presence does not prove mouse power or uniquely identify a paired mouse |
 | Manufacturer-specific protocols | Not used for generic discovery/learning; no vendor output/feature reports are sent |
 
-The app starts paused. With connected Raw Input sources it offers **Enable Circle**, which activates Click Circle and standard-button **Task View** assignments without a driver. Assigned middle clicks replace native desktop clicks. Other mice's middle clicks are forwarded as tagged synthetic input. Other trigger buttons retain their original behavior. See [driverless limits](docs/DRIVERLESS_CIRCLE.md) for supported inputs and elevated-window restrictions.
+The top-bar **Mouse actions** switch controls all saved mouse assignments, including Click Circle. Moushift remembers On or Off when you quit. With On selected, assignments resume as soon as a mouse is ready. On first use, applying a supported assignment to a connected mouse turns actions on. An explicit Off keeps them off when editing. A Back or Forward keyboard shortcut replaces navigation for the assigned mouse. Other mice keep their own bindings. See [driverless limits](docs/DRIVERLESS_CIRCLE.md) for supported inputs and elevated-window restrictions.
 
 ## Run
 
@@ -40,7 +40,7 @@ Requires Windows 10/11 x64. The release ZIP includes the .NET and Windows Deskto
 
 1. Select your mouse connection in **Devices**.
 2. Choose a standard button on the drawing or in the button list.
-3. Assign **Click Circle**, apply it, then choose **Enable Circle**.
+3. Choose **Click Circle** and select **Apply**. The status bar shows whether assignments are active.
 4. Test outside the editor. Only this mouse uses its saved device/application profile.
 
 Teach a button and its listening workspace have been removed. Existing saved custom inputs and assignments are retained without a settings reset; arbitrary HID assignment drafts remain inactive.
@@ -75,4 +75,4 @@ Do not attach personal profiles, device serials, raw device paths or unreviewed 
 
 Issue forms cover bugs and undetected inputs. Pull requests run Windows build/tests/offscreen previews. Release tags and `release/v<version>-preview.<number>` branches run verification and produce a **draft prerelease**, including a portable ZIP and SHA-256 checksum; publishing is a separate maintainer action. The workflow also supports a manual preview-tag input. Published releases are never overwritten by the draft helper.
 
-See [release notes](docs/releases/v0.14.4-preview.md). License: [MIT](LICENSE).
+See [release notes](docs/releases/v0.14.12-preview.md). License: [MIT](LICENSE).

@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private bool _editingSavedProfile;
     private bool _deviceScope;
     private RingWindow? _ringWindow;
+    private Guid? _visibleRingRequestId;
     private bool _ringPreview;
     private AppSettings _settings = AppSettings.CreateDefault();
     private readonly SettingsStore _store;
@@ -88,12 +89,12 @@ public partial class MainWindow : Window
         {
             if (!previewOnly)
             {
-            _service = new MouseRemappingService(DeviceSupportPreferences.Load(dataRoot));
+            _service = new MouseRemappingService(DeviceSupportPreferences.Load(dataRoot), _workspacePreferences.MouseActionsEnabled);
             _service.ApplySettings(_settings);
             _service.StateChanged += Service_StateChanged;
             _service.ActionError += Service_ActionError;
             _service.InputObserved += (_, input) => ObserveInput(MouseName(input));
-            _service.AuxiliaryInputObserved += (_, key) => ObserveInput($"Extra button · F{key - 0x7C + 13}");
+
             _service.RingRequested += (_, request) => Dispatcher.BeginInvoke(() =>
             { if (_service.IsCurrentRing(request.Id)) OpenRing(request.Slots, request); });
             _service.RingTriggerReleased += (_, id) => Dispatcher.BeginInvoke(() =>
@@ -109,17 +110,20 @@ public partial class MainWindow : Window
             });
             _service.RingScrolled += (_, scroll) => Dispatcher.BeginInvoke(() =>
             { if (_service.IsCurrentRing(scroll.Id)) _ringWindow?.ScrollAtCursor(scroll.Delta); });
-            _service.RingDismissed += (_, _) => Dispatcher.BeginInvoke(CloseRingVisual);
+            _service.RingDismissed += (_, _) => Dispatcher.BeginInvoke(() =>
+            {
+                if (_visibleRingRequestId is { } id && !_service.IsCurrentRing(id)) CloseRingVisual();
+            });
             _service.Start();
             ShortcutChoice.CaptureService = _service;
             UpdateEngineState();
             }
-            else { EnableButton.IsEnabled = true; EnableButton.Content = "Input setup"; EnableButton.Style = (Style)FindResource("Quiet"); EngineBadge.Text = "Input setup required"; }
+            else { MouseActionsSwitch.IsEnabled = false; EngineBadge.Text = "Preview"; }
         }
         catch (Exception ex)
         {
             StatusText.Text = "Could not start input engine: " + ex.Message;
-            EnableButton.IsEnabled = false;
+            MouseActionsSwitch.IsEnabled = false;
         }
         if (loaded.Warning is not null) StatusText.Text = loaded.Warning;
         _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -136,11 +140,13 @@ public partial class MainWindow : Window
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && _ringWindow is not null) { _service?.DismissRing(); CloseRingVisual(); e.Handled = true; } };
         if (Environment.GetCommandLineArgs().Contains("--smoke-test"))
         {
+            bool requestedOn = _workspacePreferences.MouseActionsEnabled == true;
             var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             timer.Tick += (_, _) =>
             {
                 timer.Stop();
-                bool healthy = _service is { IsRunning: true, IsEnabled: false } && string.IsNullOrWhiteSpace(_service.LastError);
+                bool healthy = _service is { IsRunning: true } && string.IsNullOrWhiteSpace(_service.LastError)
+                    && MouseActionsSwitch.IsChecked == requestedOn && _service.IsEnabled == (requestedOn && _service.CanEnable);
                 if (healthy && !_service!.CanEnable)
                 {
                     bool refused = false;
@@ -148,7 +154,7 @@ public partial class MainWindow : Window
                     healthy &= refused && !_service.IsEnabled;
                     if (!refused) _service.SetEnabled(false);
                 }
-                if (healthy) Console.WriteLine("PASS Windows startup: mouse hook, auxiliary hook and " + _service!.EmergencyShortcut + " ready; remapping disabled; device-only activation guard checked.");
+                if (healthy) Console.WriteLine($"PASS Windows startup: Mouse actions {(requestedOn ? "On" : "Off")}, route ready={_service!.CanEnable}, active={_service.IsEnabled}, emergency shortcut={_service.EmergencyShortcut}.");
                 else Console.Error.WriteLine("FAIL Windows startup: " + (_service?.LastError ?? "Input service unavailable."));
                 _exiting = true; DisposeRuntime(); Close(); System.Windows.Application.Current.Shutdown(healthy ? 0 : 1);
             };
@@ -167,6 +173,7 @@ public partial class MainWindow : Window
                 if (MappingPage.Visibility != Visibility.Visible || DevicesPage.Visibility != Visibility.Collapsed
                     || DeviceDetailPage.Visibility != Visibility.Visible || EditorPane.Visibility != Visibility.Collapsed)
                     throw new InvalidOperationException("Device selection did not open the selected mouse and its assignments with the action form closed.");
+                UpdateLayout();
                 if (BackCallout.Tag?.ToString() != "XButton1" || ForwardCallout.Tag?.ToString() != "XButton2"
                     || HeroMouse.Anchor(MouseControl.XButton1).Y <= HeroMouse.Anchor(MouseControl.XButton2).Y
                     || MouseName(MouseControl.XButton1) != "Back button" || MouseName(MouseControl.XButton2) != "Forward button")
@@ -206,16 +213,15 @@ public partial class MainWindow : Window
                 ActionCombo.SelectedValue = ActionKind.Shortcut;
                 ShortcutChoice.SetShortcut(9, KeyModifiers.Alt); ShortcutChoice_Changed(this, EventArgs.Empty);
                 SaveBinding_Click(this, new RoutedEventArgs());
-                ShowAuxiliaryCheck.IsChecked = true;
-                BindingsList.SelectedItem = _bindings.Single(b => b.VirtualKey == 0x7C);
+                BindingsList.SelectedItem = _bindings.Single(b => b.Mouse == MouseControl.XButton2);
                 ActionCombo.SelectedValue = ActionKind.Text; TextActionBox.Text = "Moushift test ✓";
                 SaveBinding_Click(this, new RoutedEventArgs());
-                if (_store.Load().Settings.Profiles.Single(p => p.Id == _editingProfileId).AuxiliaryKeys.Single(b => b.VirtualKey == 0x7C).Action.Text != "Moushift test ✓")
-                    throw new InvalidOperationException("Auxiliary editor roundtrip failed.");
+                var forward = _store.Load().Settings.Profiles.Single(p => p.Id == _editingProfileId).Bindings.Single(b => b.Input == MouseControl.XButton2);
+                if (forward.Action.Kind != ActionKind.Text || forward.Action.Text != "Moushift test ✓")
+                    throw new InvalidOperationException("Forward button text assignment did not persist.");
                 ResetBinding_Click(this, new RoutedEventArgs());
-                if (_store.Load().Settings.Profiles.Single(p => p.Id == _editingProfileId).AuxiliaryKeys.Count != 0)
-                    throw new InvalidOperationException("Auxiliary reset failed.");
-                ShowAuxiliaryCheck.IsChecked = false;
+                if (_store.Load().Settings.Profiles.Single(p => p.Id == _editingProfileId).Bindings.Single(b => b.Input == MouseControl.XButton2).Action.Kind != ActionKind.Passthrough)
+                    throw new InvalidOperationException("Reset did not restore the forward button.");
                 RefreshBindings(MouseControl.XButton1);
                 VerifyProfileScreens();
                 VerifyAppearance();
@@ -225,7 +231,7 @@ public partial class MainWindow : Window
             if (page == "mapping-expanded")
             {
                 ShowPage("mappings"); SourceExpander.IsExpanded = true;
-                ShowAuxiliaryCheck.IsChecked = true; RefreshBindings(MouseControl.XButton1);
+                RefreshBindings(MouseControl.XButton1);
                 ScopeExpander.IsExpanded = true; CloseEditor();
             }
             else if (page == "devices-sample")
@@ -233,7 +239,6 @@ public partial class MainWindow : Window
                 ShowPage("devices"); _deviceCards.Clear();
                 _deviceCards.Add(new("preview-only", "Razer mouse · sample device", "RAZER", "Design preview only", (Brush)FindResource("Accent")));
                 EmptyDevicesBox.Visibility = Visibility.Collapsed;
-                DevicesSubtitle.Text = "Design preview · Sample connection";
             }
             else if (page?.StartsWith("action-") == true || page == "shortcut-manual")
             {
@@ -266,7 +271,7 @@ public partial class MainWindow : Window
             }
             UpdateLayout();
             Window? ringPreview = null;
-            if (page == "ring") { ringPreview = new RingWindow(EditingProfile.RingSlots, true); ringPreview.Show(); ((RingWindow)ringPreview).PreviewSelection(0); ringPreview.UpdateLayout(); }
+            if (page == "ring") { ringPreview = new RingWindow(EditingProfile.RingSlots, true, deviceKey: EditingProfile.DeviceKey); ringPreview.Show(); ((RingWindow)ringPreview).PreviewSelection(0); ringPreview.UpdateLayout(); }
             else if (page is "ring-editor" or "ring-adjustment" or "ring-folder")
             {
                 var ringEditor = new RingEditorWindow(EditingProfile.RingSlots, null, EditingProfile.Name);
@@ -321,12 +326,12 @@ public partial class MainWindow : Window
         UpdateProfileManager();
     }
 
-    private void RefreshBindings(MouseControl? select = null, int? auxiliaryKey = null)
+    private void RefreshBindings(MouseControl? select = null)
     {
         bool prior = _loading; _loading = true;
         var old = BindingsList.SelectedItem as BindingRow;
-        Guid? selectedLearned = select is null && auxiliaryKey is null ? old?.LearnedId : null;
-        if (select is null && auxiliaryKey is null) { select = old?.Mouse; auxiliaryKey = old?.VirtualKey; }
+        Guid? selectedLearned = select is null ? old?.LearnedId : null;
+        select ??= old?.Mouse;
         _bindings.Clear();
         foreach (var (control, name) in MouseNames.OrderBy(p => p.Control == MouseControl.XButton1 ? 4 : p.Control == MouseControl.XButton2 ? 3 : Array.FindIndex(MouseNames, n => n.Control == p.Control)))
         {
@@ -334,21 +339,14 @@ public partial class MainWindow : Window
             string summary = action.Kind == ActionKind.Passthrough ? control switch
             { MouseControl.LeftButton => "Left click", MouseControl.RightButton => "Right click", MouseControl.MiddleButton => "Middle click", _ => "Default" } : DescribeAction(action);
             var learned = _settings.LearnedControls.Where(c => c.DeviceKey == EditingProfile.DeviceKey && c.Identity.StandardControl == control).OrderByDescending(c => c.ObservedAt).FirstOrDefault();
-            _bindings.Add(new(control, null, learned?.Name ?? name, summary));
+            _bindings.Add(new(control, learned?.Name ?? name, summary));
         }
-        if (ShowAuxiliaryCheck.IsChecked == true)
-            for (int key = 0x7C; key <= 0x87; key++)
-            {
-                var action = EditingProfile.AuxiliaryKeys.FirstOrDefault(b => b.VirtualKey == key)?.Action ?? new InputAction();
-                _bindings.Add(new(null, key, $"Extra button · F{key - 0x7C + 13}", DescribeAction(action)));
-            }
         foreach (var learned in _settings.LearnedControls.Where(c => c.DeviceKey == EditingProfile.DeviceKey && c.Identity.StandardControl is null))
         {
             var action = EditingProfile.LearnedBindings.FirstOrDefault(b => b.ControlId == learned.Id)?.Action ?? new();
-            _bindings.Add(new(null, null, learned.Name, "Learned · " + (action.Kind == ActionKind.Passthrough ? "No assignment" : "Draft: " + DescribeAction(action)), learned.Id));
+            _bindings.Add(new(null, learned.Name, "Learned · " + (action.Kind == ActionKind.Passthrough ? "No assignment" : "Draft: " + DescribeAction(action)), learned.Id));
         }
-        BindingsList.SelectedItem = _bindings.FirstOrDefault(b => selectedLearned is not null ? b.LearnedId == selectedLearned : auxiliaryKey is not null
-            ? b.VirtualKey == auxiliaryKey : b.Mouse == select && b.VirtualKey is null) ?? _bindings[3];
+        BindingsList.SelectedItem = _bindings.FirstOrDefault(b => selectedLearned is not null ? b.LearnedId == selectedLearned : b.Mouse == select && select.HasValue) ?? _bindings[3];
         _loading = prior;
         LoadSelectedBinding();
         ApplyWorkspaceSizing();
@@ -365,9 +363,7 @@ public partial class MainWindow : Window
         if (BindingsList.SelectedItem is not BindingRow row) return;
         _loadingEditor = true;
         InputAction action = row.LearnedId is { } learnedId ? EditingProfile.LearnedBindings.FirstOrDefault(b => b.ControlId == learnedId)?.Action ?? new()
-            : row.Mouse is { } mouse
-            ? ProfileResolver.ResolveDeviceBinding(_settings, EditingProfile, mouse)
-            : EditingProfile.AuxiliaryKeys.FirstOrDefault(b => b.VirtualKey == row.VirtualKey)?.Action ?? new();
+            : ProfileResolver.ResolveDeviceBinding(_settings, EditingProfile, row.Mouse!.Value);
         SelectedInputTitle.Text = row.Name;
         SavedActionText.Text = "Saved: " + (action.Kind == ActionKind.Passthrough ? "Default behavior" : DescribeAction(action));
         ApplyBindingButton.Content = row.LearnedId is not null ? "Save draft" : "Apply";
@@ -379,8 +375,6 @@ public partial class MainWindow : Window
             && EditingProfile.Bindings.FirstOrDefault(b => b.Input == inheritedMouse)?.Action.Kind is null or ActionKind.Passthrough)
             SavedActionText.Text = "Inherited from General: Click Circle";
         SelectedInputHint.Text = row.LearnedId is not null ? "Learned HID input · assignment drafts are saved, but exclusive remapping is not available for this input yet."
-            : row.VirtualKey is not null
-            ? "Assign an extra mouse button that sends a keyboard key."
             : InputPresentation.Position(row.Mouse!.Value);
         _draftKeyCode = action.KeyCode; _draftModifiers = action.Modifiers;
         ActionCombo.SelectedValue = action.IsTaskViewAssignment ? ActionKind.TaskView : action.Kind;
@@ -388,7 +382,6 @@ public partial class MainWindow : Window
         TextActionBox.Text = action.Text;
         ApplicationPathBox.Text = action.ApplicationPath;
         ArgumentsBox.Text = action.Arguments;
-        AuxiliaryHint.Visibility = row.VirtualKey is null ? Visibility.Collapsed : Visibility.Visible;
         UpdateActionPanels();
         UpdateShortcutDisplay();
         UpdateCallouts();
@@ -403,14 +396,17 @@ public partial class MainWindow : Window
         TextPanel.Visibility = choice.Kind == ActionKind.Text ? Visibility.Visible : Visibility.Collapsed;
         LaunchPanel.Visibility = choice.Kind == ActionKind.LaunchApplication ? Visibility.Visible : Visibility.Collapsed;
         RingPanel.Visibility = choice.Kind == ActionKind.Ring ? Visibility.Visible : Visibility.Collapsed;
-        ActionDescriptionBox.Visibility = choice.Kind is ActionKind.Ring or ActionKind.TaskView ? Visibility.Visible : Visibility.Collapsed;
+        ActionDescriptionBox.Visibility = choice.Kind is ActionKind.Ring or ActionKind.TaskView or ActionKind.Shortcut ? Visibility.Visible : Visibility.Collapsed;
         var input = BindingsList.SelectedItem as BindingRow;
         bool exclusive = EditingProfile.DeviceKey is { } key && _service?.CanRouteDevice(key) == true;
         ActionDescription.Text = choice.Kind switch
         {
             ActionKind.Passthrough => "Keeps the button's normal behavior.",
             ActionKind.Disabled => "This input performs no action.",
-            ActionKind.Shortcut => "Runs once per press.",
+            ActionKind.Shortcut when input?.LearnedId is not null => "Custom HID shortcut assignments are saved as drafts.",
+            ActionKind.Shortcut when exclusive => "Runs once per press.",
+            ActionKind.Shortcut when input?.Mouse is MouseControl.XButton1 or MouseControl.XButton2 => "Runs the shortcut in place of the normal Back or Forward action.",
+            ActionKind.Shortcut => "This button needs exclusive input support to run a keyboard shortcut.",
             ActionKind.MouseButton => "Supports holding and dragging.",
             ActionKind.Text => "Types text into the focused application.",
             ActionKind.LaunchApplication => "Opens your selected local application.",
@@ -458,7 +454,28 @@ public partial class MainWindow : Window
         var profile = proposed.Profiles.Single(p => p.Id == _editingProfileId);
         SetBinding(profile, row, action);
         if (CommitSettings(proposed, (row.LearnedId is not null ? "Draft saved · original HID function is unchanged · " : "Saved · ") + $"{row.Name} → {DescribeAction(action)} · {profile.Name}"))
-        { RefreshBindings(row.Mouse, row.VirtualKey); if (row.LearnedId is { } id) BindingsList.SelectedItem = _bindings.FirstOrDefault(b => b.LearnedId == id); }
+        {
+            RefreshBindings(row.Mouse);
+            if (row.LearnedId is { } id) BindingsList.SelectedItem = _bindings.FirstOrDefault(b => b.LearnedId == id);
+            else if (!_previewOnly && row.Mouse is { } mouse && profile.DeviceKey is { } deviceKey && action.Kind != ActionKind.Passthrough)
+                ActivateAppliedBinding(deviceKey, mouse, action);
+        }
+    }
+
+    private void ActivateAppliedBinding(string deviceKey, MouseControl input, InputAction action)
+    {
+        try
+        {
+            var result = _service?.StartAppliedBinding(deviceKey, input, action);
+            StatusText.Text += result switch
+            {
+                AppliedBindingStatus.Active => " · Assignments active",
+                AppliedBindingStatus.Paused => " · Turn on Mouse actions to use it.",
+                _ => " · No active input route for this assignment"
+            };
+            UpdateEngineState();
+        }
+        catch (InvalidOperationException error) { StatusText.Text += " · " + error.Message; }
     }
 
     private static void SetBinding(MappingProfile profile, BindingRow row, InputAction action)
@@ -474,11 +491,6 @@ public partial class MainWindow : Window
             if (binding is null) profile.Bindings.Add(new() { Input = mouse, Action = action });
             else binding.Action = action;
         }
-        else if (row.VirtualKey is { } key)
-        {
-            profile.AuxiliaryKeys.RemoveAll(b => b.VirtualKey == key);
-            if (action.Kind != ActionKind.Passthrough) profile.AuxiliaryKeys.Add(new() { VirtualKey = key, Action = action });
-        }
     }
 
     private void ResetBinding_Click(object sender, RoutedEventArgs e)
@@ -486,7 +498,7 @@ public partial class MainWindow : Window
         if (BindingsList.SelectedItem is not BindingRow row) return;
         var proposed = _settings.DeepClone();
         SetBinding(proposed.Profiles.Single(p => p.Id == _editingProfileId), row, new());
-        if (CommitSettings(proposed, $"Restored default behavior for {row.Name}.")) RefreshBindings(row.Mouse, row.VirtualKey);
+        if (CommitSettings(proposed, $"Restored default behavior for {row.Name}.")) RefreshBindings(row.Mouse);
     }
 
     private void ProfilesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -552,8 +564,7 @@ public partial class MainWindow : Window
         else BindingsList.SelectedItem = row;
         OpenEditor();
     }
-    private void ShowAuxiliary_Changed(object sender, RoutedEventArgs e)
-    { if (!_loading) { RefreshBindings(); if (ShowAuxiliaryCheck.IsChecked == true) SourceExpander.IsExpanded = true; } }
+
     private void ActionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { UpdateActionPanels(); MarkEditorChanged(); }
 
     private void UpdateShortcutDisplay() => ShortcutChoice.SetShortcut(_draftKeyCode, _draftModifiers);
@@ -587,27 +598,28 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true) ApplicationPathBox.Text = dialog.FileName;
     }
 
-    private void Enable_Click(object sender, RoutedEventArgs e)
+    private bool _syncingMouseActions;
+    private void MouseActions_Changed(object sender, RoutedEventArgs e)
     {
-        try
+        if (!_syncingMouseActions) ChangeMouseActions(MouseActionsSwitch.IsChecked == true);
+    }
+
+    private void ChangeMouseActions(bool on)
+    {
+        if (_service is null) return;
+        try { _service.SetMouseActions(on); }
+        catch (InvalidOperationException error) { StatusText.Text = error.Message; }
+        UpdateEngineState();
+    }
+
+    private bool _mouseActionsSavePending;
+    private void RememberMouseActions(bool retryPending = false)
+    {
+        if (_service?.MouseActionsEnabled is bool on && (_workspacePreferences.MouseActionsEnabled != on || (retryPending && _mouseActionsSavePending)))
         {
-            if (_service is null) return;
-            if (!_service.CanEnable)
-            {
-                ShowPage("setup"); SetupGuideExpander.IsExpanded = true;
-                StatusText.Text = _service.HasDeviceRouting
-                    ? "Cannot enable: no verified mouse input source. Your saved profiles are unchanged."
-                    : "Connect a mouse and wait for input observation. Click Circle does not require a driver.";
-                return;
-            }
-            _service.SetEnabled(!_service.IsEnabled);
-            StatusText.Text = _service.IsEnabled
-                ? _service.DriverlessCircleMode ? "Click Circle and Task View enabled for each mouse. Assigned middle clicks are replaced."
-                    : "Assignments enabled · Your saved actions are active."
-                : "Assignments paused · Normal mouse behavior.";
-            UpdateEngineState();
+            _workspacePreferences = _workspacePreferences with { MouseActionsEnabled = on };
+            _mouseActionsSavePending = !SaveWorkspacePreferences();
         }
-        catch (Exception ex) { StatusText.Text = ex.Message; }
     }
 
     private void Service_StateChanged(object? sender, EventArgs e)
@@ -637,20 +649,26 @@ public partial class MainWindow : Window
     private void UpdateEngineState()
     {
         if (_disposed || _service is null) return;
+        try { _service.ResumeWhenReady(); }
+        catch (InvalidOperationException error) { _service.SetEnabled(false); StatusText.Text = error.Message; }
+        if (_service.IsRunning) RememberMouseActions();
         if (!_service.IsEnabled && !_ringPreview) CloseRingVisual();
+        if (_service.IsEnabled && _inputTestDeviceKey is not null) CloseInputTest();
         bool enabled = _service.IsEnabled;
-        EngineBadge.Text = !_service.IsRunning ? "Input unavailable" : !_service.CanEnable ? "Waiting for mouse" : enabled ? _service.DriverlessCircleMode ? "Circle enabled · Driverless" : "Enabled" : "Paused";
-        EngineBadge.Foreground = (Brush)FindResource(enabled ? "Accent" : "Muted");
-        EnableButton.Content = !_service.CanEnable ? "Input status" : enabled ? "Pause" : _service.DriverlessCircleMode ? "Enable Circle" : "Enable";
-        EnableButton.Style = (Style)FindResource(_service.CanEnable && !enabled ? "Primary" : typeof(System.Windows.Controls.Button));
-        EnableButton.IsEnabled = _service.IsRunning;
+        bool on = _service.MouseActionsEnabled == true;
+        EngineBadge.Text = !_service.IsRunning ? "Input unavailable" : on && !_service.CanEnable ? "Waiting for mouse" : "";
+        EngineBadge.Visibility = EngineBadge.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        _syncingMouseActions = true;
+        try { MouseActionsSwitch.IsChecked = on; }
+        finally { _syncingMouseActions = false; }
+        MouseActionsSwitch.IsEnabled = _service.IsRunning;
         if (_service.IsRunning)
         {
             EmergencyShortcutLabel.Text = _service.EmergencyShortcut.Replace("+", " + ");
             EmergencyHelp.Text = _service.EmergencyShortcut + " pauses assignments. Standard mouse actions pause inside the editor. Closing minimizes to the system tray; choose Quit to exit.";
         }
-        if (_tray is not null) _tray.Text = !_service.CanEnable ? "Moushift · Waiting for mouse" : enabled ? _service.DriverlessCircleMode ? "Moushift · Driverless Circle enabled" : "Moushift · Assignments enabled" : "Moushift · Paused";
-        if (_trayToggle is not null) { _trayToggle.Text = !_service.CanEnable ? "Input status" : enabled ? "Pause" : _service.DriverlessCircleMode ? "Enable Click Circle" : "Enable assignments"; _trayToggle.Enabled = _service.IsRunning; }
+        if (_tray is not null) _tray.Text = "Moushift · " + (EngineBadge.Text.Length > 0 ? EngineBadge.Text : enabled ? "Mouse actions on" : "Mouse actions off");
+        if (_trayToggle is not null) { _trayToggle.Checked = on; _trayToggle.Enabled = _service.IsRunning; }
         if (!string.IsNullOrWhiteSpace(_service.LastError)) StatusText.Text = _service.LastError;
         string inputStatus = _service.InputStatus;
         foreach (var label in InputPresentation.MouseInputs) inputStatus = inputStatus.Replace(label.Control + ":", label.Name + ":", StringComparison.Ordinal);
@@ -674,16 +692,16 @@ public partial class MainWindow : Window
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
         }
         if (DateTime.UtcNow - _lastInputShown > TimeSpan.FromSeconds(4))
-            InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? _service.DriverlessCircleMode ? "Per-mouse Circle · Middle-click routing" : "Per-mouse assignments enabled" : "Paused";
+            InputStatusText.Text = !_service.CanEnable ? "Waiting for connected mouse input" : _service.IsEnabled ? "Per-mouse assignments active" : "Paused";
     }
 
-    private void MappingsNav_Click(object sender, RoutedEventArgs e) { ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
     private void DevicesNav_Click(object sender, RoutedEventArgs e) { ShowPage("devices"); if (!_previewOnly) RefreshDevices(); }
     private void AboutNav_Click(object sender, RoutedEventArgs e) => ShowPage("about");
     private void ShowPage(string page)
     {
         if (page == "mappings" && _selectedDevice?.DeviceKey is null) { ShowPage("devices"); StatusText.Text = "Choose a mouse to edit its separate profile."; return; }
         if (!TryCloseCircleEditor()) return;
+        CloseInputTest();
         if (page == "devices")
         {
             _selectedDevice = null; _editingSavedProfile = false; _returnToProfiles = false;
@@ -715,7 +733,6 @@ public partial class MainWindow : Window
         }
         else CloseEditor();
         if (page == "setup") UpdateSetupStatus();
-        MappingsNav.Visibility = Visibility.Visible;
         foreach (var (navigation, selected) in new[] { (DevicesNav, workspace), (ProfilesNav, page == "profiles"), (AboutNav, page == "about"), (AppearanceNav, page is "appearance" or "setup"), (SetupNav, page == "setup") })
         {
             navigation.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, selected ? "Ink" : "Muted");
@@ -725,7 +742,6 @@ public partial class MainWindow : Window
             navigation.BorderThickness = new Thickness(1);
         }
         PageTitle.Text = page switch { "devices" => "Devices", "about" => "Help", "profiles" => "Profiles", "appearance" => "Settings", "setup" => "Input support", _ => "Customize" };
-        if (workspace) SetInspectorTab(ButtonsContent.Visibility == Visibility.Collapsed);
         ApplyWorkspaceSizing();
     }
     private void RefreshDevices_Click(object sender, RoutedEventArgs e) => RefreshDevices();
@@ -744,8 +760,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            DevicesSubtitle.Text = "Could not refresh connections";
-            PresenceDetails.Text = "Device list may be out of date: " + ex.Message;
+            PresenceDetails.Text = "Could not refresh connections. The list may be out of date. " + ex.Message;
         }
         finally { Interlocked.Exchange(ref _presencePolling, 0); }
     }
@@ -770,10 +785,10 @@ public partial class MainWindow : Window
             next.Profiles.Add(profile);
             if (!CommitSettings(next, "Created a separate profile for " + device.Name)) return;
         }
-        _loading = true; _deviceScope = true; DeviceScopeCheck.IsChecked = true; ShowAuxiliaryCheck.IsChecked = false; ShowAuxiliaryCheck.IsEnabled = false; _loading = false;
+        _loading = true; _deviceScope = true; DeviceScopeCheck.IsChecked = true; _loading = false;
         _editingProfileId = profile.Id;
         foreach (var row in _deviceCards) row.IsSelected = row.DeviceKey == device.DeviceKey;
-        PopulateProfiles(); RefreshBindings(); CloseEditor(); ButtonsContent.Visibility = Visibility.Visible; ShowPage("mappings");
+        PopulateProfiles(); RefreshBindings(); CloseEditor(); ShowPage("mappings");
     }
 
     private void MouseCallout_Click(object sender, RoutedEventArgs e)
@@ -781,7 +796,7 @@ public partial class MainWindow : Window
         if (sender is not System.Windows.Controls.Button button || !Enum.TryParse<MouseControl>(button.Tag?.ToString(), out var input)) return;
         EditBinding(_bindings.Single(row => row.Mouse == input));
     }
-    private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; ButtonsContent.Visibility = Visibility.Visible; SetInspectorTab(false); }
+    private void OpenEditor() { EditorPane.Visibility = Visibility.Visible; SourceExpander.Visibility = Visibility.Collapsed; }
     private void CloseEditor() { EditorPane.Visibility = Visibility.Collapsed; SourceExpander.Visibility = Visibility.Visible; }
     private void CloseEditor_Click(object sender, RoutedEventArgs e)
     {
@@ -809,8 +824,6 @@ public partial class MainWindow : Window
             { _deviceScope = false; _loading = true; DeviceScopeCheck.IsChecked = false; _loading = false; return; }
         }
         _editingProfileId = profile?.Id ?? _settings.ActiveProfileId;
-        ShowAuxiliaryCheck.IsEnabled = !_deviceScope;
-        if (_deviceScope) ShowAuxiliaryCheck.IsChecked = false;
         PopulateProfiles(); RefreshBindings();
     }
 
@@ -823,18 +836,26 @@ public partial class MainWindow : Window
     private void OpenRing(IReadOnlyList<RingSlot> slots, RingRequest? request)
     {
         CloseRingVisual(); _ringPreview = request is null;
-        var window = new RingWindow(slots, _ringPreview, request?.Driverless == true); _ringWindow = window;
+        _visibleRingRequestId = request?.Id;
+        string? deviceKey = request is null ? EditingProfile.DeviceKey : request.DeviceKey;
+        var window = new RingWindow(slots, _ringPreview, request?.Driverless == true, deviceKey); _ringWindow = window;
         window.Invoked += (_, invocation) =>
         {
             if (request is not null) _service?.InvokeRingAction(request.Id, invocation);
             else StatusText.Text = "Preview: " + RingNavigation.Resolve(slots, invocation.Path)?.Name + " (action not executed)";
         };
         window.Closed += (_, _) =>
-        { if (ReferenceEquals(_ringWindow, window)) { _ringWindow = null; _ringPreview = false; if (request is not null) _service?.DismissRing(); } };
+        {
+            if (!ReferenceEquals(_ringWindow, window)) return;
+            _ringWindow = null;
+            _visibleRingRequestId = null;
+            _ringPreview = false;
+            if (request is not null) _service?.DismissRing(request.Id);
+        };
         window.Show(); var bounds = window.PositionAtCursor();
         if (request is not null) _service?.SetRingBounds(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
     }
-    private void CloseRingVisual() { var ring = _ringWindow; _ringWindow = null; _ringPreview = false; ring?.Close(); }
+    private void CloseRingVisual() { var ring = _ringWindow; _ringWindow = null; _visibleRingRequestId = null; _ringPreview = false; ring?.Close(); }
 
     private void UpdateCallouts()
     {
@@ -884,8 +905,8 @@ public partial class MainWindow : Window
         finally { DestroyIcon(icon); }
         var menu = new System.Windows.Forms.ContextMenuStrip();
         menu.Items.Add("Open Moushift", null, (_, _) => Dispatcher.Invoke(ShowFromTray));
-        _trayToggle = new System.Windows.Forms.ToolStripMenuItem("Enable assignments") { Enabled = false };
-        _trayToggle.Click += (_, _) => Dispatcher.Invoke(() => Enable_Click(this, new RoutedEventArgs()));
+        _trayToggle = new System.Windows.Forms.ToolStripMenuItem("Mouse actions") { Enabled = false };
+        _trayToggle.Click += (_, _) => Dispatcher.Invoke(() => ChangeMouseActions(_service?.MouseActionsEnabled != true));
         menu.Items.Add(_trayToggle);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => Dispatcher.Invoke(ExitApp));
@@ -905,6 +926,7 @@ public partial class MainWindow : Window
     private void DisposeRuntime()
     {
         if (_disposed) return;
+        if (_service?.IsRunning == true) RememberMouseActions(retryPending: true);
         _disposed = true; _statusTimer?.Stop();
         CloseRingVisual();
         StopDeviceActivity();
@@ -919,7 +941,7 @@ public partial class MainWindow : Window
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool DestroyIcon(nint hIcon);
     private sealed record ProfileRow(Guid Id, string Name, string Subtitle) { public override string ToString() => Name; }
-    private sealed record BindingRow(MouseControl? Mouse, int? VirtualKey, string Name, string Summary, Guid? LearnedId = null)
+    private sealed record BindingRow(MouseControl? Mouse, string Name, string Summary, Guid? LearnedId = null)
     {
         public string Number => Mouse switch { MouseControl.LeftButton => "1", MouseControl.RightButton => "2", MouseControl.MiddleButton => "3", MouseControl.XButton2 => "4", MouseControl.XButton1 => "5", _ => "·" };
         public string Glyph => Mouse switch { MouseControl.XButton1 => "\uE72B", MouseControl.XButton2 => "\uE72A", MouseControl.WheelUp => "\uE74A", MouseControl.WheelDown => "\uE74B", MouseControl.WheelLeft => "\uE76B", MouseControl.WheelRight => "\uE76C", _ => "\uE962" };

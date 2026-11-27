@@ -28,11 +28,11 @@ public sealed partial class MouseRemappingService
         _rawInputReady = available;
         if (!available)
         {
-            ResetMiddleGate();
-            if (_enabled && !HasResolvedDeviceRoutes) SetEnabled(false);
+            ResetButtonGates();
+            if (!HasResolvedDeviceRoutes) SuspendDeviceActions();
             _dispatchState.AdvanceRouting(); DismissRing();
         }
-        RefreshMiddleGate();
+        RefreshButtonGates();
         RaiseStateChanged();
     }
 
@@ -51,7 +51,9 @@ public sealed partial class MouseRemappingService
         if (!_rawInputReady || HasDeviceRouting) return;
         var snapshot = Volatile.Read(ref _snapshot);
         var stamp = _dispatchState.Current;
-        bool ready = _running && _enabled && !snapshot.OwnWindow && Volatile.Read(ref _captureSession) is null
+        long tick = Environment.TickCount64;
+        bool sideButton = input.Control is MouseControl.XButton1 or MouseControl.XButton2;
+        bool ready = _running && _enabled && (!snapshot.OwnWindow || sideButton) && Volatile.Read(ref _captureSession) is null
             && snapshot.Generation == stamp.RoutingGeneration && snapshot.ForegroundWindow != 0
             && NativeMethods.GetForegroundWindow() == snapshot.ForegroundWindow;
         MappingProfile? profile;
@@ -64,23 +66,43 @@ public sealed partial class MouseRemappingService
             }
             if (wheelDelta.HasValue && _rawCircles.DeviceKey(input.DevicePath) is not null) Observe(input.Control);
             profile = wheelDelta is { } delta
-                ? _rawCircles.Wheel(_settings, input.DevicePath, delta, ready && !IsRingOpen, snapshot.ApplicationPath, Environment.TickCount64)
+                ? _rawCircles.Wheel(_settings, input.DevicePath, delta, ready && !IsRingOpen, snapshot.ApplicationPath, tick)
                 : _rawCircles.Press(_settings, input.DevicePath, input.Control, input.Pressed,
                     ready && (input.Control == MouseControl.MiddleButton || !IsRingOpen), snapshot.ApplicationPath);
         }
         var action = profile?.Bindings.FirstOrDefault(binding => binding.Input == input.Control)?.Action;
+        if (sideButton)
+        {
+            if (OwnWindowPolicy.ShouldBypass(snapshot.OwnWindow, input.Control, action, false))
+                action = null;
+            bool replace = RawCircleRouter.ReplacesNative(input.Control, action);
+            var route = RouteRawButton(input.Control, input.DevicePath, input.Pressed, replace, NativeMethods.GetForegroundWindow());
+            if (replace && !route.Claimed) return;
+        }
         if (input.Control == MouseControl.MiddleButton)
         {
-            var result = RouteRawMiddle(input.DevicePath, input.Pressed, action, NativeMethods.GetForegroundWindow());
-            if (!result.Circle || IsRingOpen) return;
+            var result = RouteRawButton(input.Control, input.DevicePath, input.Pressed, action is not null, NativeMethods.GetForegroundWindow());
+            if (!input.Pressed)
+                (profile, action) = EndDirectionalCircle(input.DevicePath, result.ReleasedClaim, ready, stamp, snapshot.ForegroundWindow, tick);
+            else
+            {
+                if (!result.Claimed || IsRingOpen) return;
+                if (profile?.DirectionalCircle is not null && action?.Kind == ActionKind.Ring)
+                {
+                    BeginDirectionalCircle(input.DevicePath, profile, stamp, snapshot.ForegroundWindow, tick);
+                    return;
+                }
+            }
         }
         if (profile is null || action is null) return;
         bool opensCircle = action.Kind == ActionKind.Ring;
         if (!Enqueue(new(action, false, false, Interlocked.Increment(ref _token), stamp.EnableEpoch,
             stamp.RoutingGeneration, snapshot.ForegroundWindow, opensCircle ? profile : null, opensCircle)))
         { DisarmFromHook("Mouse action queue is full; observation paused."); return; }
-        string actionName = opensCircle ? "Click Circle" : "Task View";
-        string inputBehavior = input.Control == MouseControl.MiddleButton ? "native middle click replaced" : "original input retained";
+        string actionName = opensCircle ? "Click Circle" : action.IsTaskViewAssignment ? "Task View"
+            : sideButton ? "Keyboard shortcut" : "Quick gesture";
+        string inputBehavior = input.Control == MouseControl.MiddleButton ? "native middle click replaced"
+            : RawCircleRouter.ReplacesNative(input.Control, action) ? "native side button replaced" : "original input retained";
         Volatile.Write(ref _inputStatus, $"{profile.DeviceName ?? "Mouse"} · {input.Control} · {actionName}; {inputBehavior}.");
     }
 }

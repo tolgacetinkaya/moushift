@@ -18,12 +18,17 @@ public partial class MainWindow
         ApplyWorkspaceSizing(); SaveWorkspacePreferences();
     }
 
-    private void SaveWorkspacePreferences()
+    private bool SaveWorkspacePreferences(WorkspacePreferences? proposed = null)
     {
-        if (_previewOnly) return;
-        try { _workspacePreferences.Save(Path.GetDirectoryName(_store.FilePath)!); }
+        var workspace = proposed ?? _workspacePreferences;
+        try
+        {
+            if (!_previewOnly) workspace.Save(Path.GetDirectoryName(_store.FilePath)!);
+            _workspacePreferences = workspace;
+            return true;
+        }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { StatusText.Text = "Could not save workspace layout: " + error.Message; }
+        { StatusText.Text = "Could not save workspace preferences: " + error.Message; return false; }
     }
 
     private void InspectorSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
@@ -56,6 +61,7 @@ public partial class MainWindow
     private void OpenCircleWorkspace()
     {
         if (_circleEditor is not null || EditingProfile.DeviceKey is null) return;
+        CloseInputTest();
         _circleReturnToDetail = DeviceDetailPage.Visibility == Visibility.Visible;
         _circleEditor = new RingEditorWindow(_settings, _editingProfileId, _service, _selectedDevice?.Name ?? EditingProfile.DeviceName);
         CircleWorkspaceHost.Content = _circleEditor.HostIn(this, SaveCircleWorkspace, () => TryCloseCircleEditor(),
@@ -87,6 +93,6 @@ public partial class MainWindow
         DevicesWorkspace.Visibility = Visibility.Visible;
         DevicesPage.Visibility = _circleReturnToDetail ? Visibility.Collapsed : Visibility.Visible;
         DeviceDetailPage.Visibility = _circleReturnToDetail ? Visibility.Visible : Visibility.Collapsed;
-        ButtonsContent.Visibility = Visibility.Visible; CloseEditor(); SetInspectorTab(false); ApplyWorkspaceSizing();
+        CloseEditor(); ApplyWorkspaceSizing();
     }
 }

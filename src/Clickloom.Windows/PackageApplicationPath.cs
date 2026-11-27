@@ -25,6 +25,7 @@ internal static class PackageApplicationPath
                 var path = new StringBuilder((int)size);
                 if (GetPackagePathByFullName(fullName, ref size, path) != 0) continue;
                 string root = path.ToString();
+                if (!ApplicationCatalog.IsLocalDiscoveryPath(root)) continue;
                 using var reader = XmlReader.Create(Path.Combine(root, "AppxManifest.xml"), new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 4_000_000 });
                 var manifest = XDocument.Load(reader);
                 var app = manifest.Descendants().FirstOrDefault(e => e.Name.LocalName == "Application" && (string?)e.Attribute("Id") == application);
@@ -32,7 +33,7 @@ internal static class PackageApplicationPath
                 if (string.IsNullOrWhiteSpace(executable) || Path.IsPathFullyQualified(executable)) continue;
                 string candidate = Path.GetFullPath(Path.Combine(root, executable));
                 if (candidate.StartsWith(root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
-                    && ApplicationCatalog.NormalizeExecutable(candidate) is { } resolved) return resolved;
+                    && ApplicationCatalog.NormalizeDiscoveredExecutable(candidate) is { } resolved) return resolved;
             }
         }
         finally { Marshal.FreeHGlobal(buffer); }

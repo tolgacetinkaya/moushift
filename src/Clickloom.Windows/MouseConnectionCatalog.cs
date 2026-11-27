@@ -6,12 +6,28 @@ namespace Clickloom.Windows;
 public sealed record MouseConnection(string Key, string Name, string Manufacturer, string Transport, bool IsReceiver, bool IsAuxiliary, string[] DevicePaths)
 {
     public int? BatteryPercent { get; init; }
+    public string? MouseModelName { get; init; }
+    public string DisplayName
+    {
+        get
+        {
+            if (!IsReceiver || IsAuxiliary) return Name;
+            if (MouseModelName is { Length: > 0 } product) return product;
+            const string gamingDongle = " Gaming Dongle";
+            if (Name.EndsWith(gamingDongle, StringComparison.OrdinalIgnoreCase))
+            {
+                var model = Name[..^gamingDongle.Length].Trim();
+                if (model.Length != 0 && !model.Equals(Manufacturer, StringComparison.OrdinalIgnoreCase)) return model;
+            }
+            return Manufacturer == "Windows" ? "Wireless mouse" : Manufacturer + " mouse";
+        }
+    }
     public string Status => IsReceiver ? Transport + " receiver connected · mouse availability unconfirmed"
         : IsAuxiliary ? "Additional pointing interface"
         : Transport == "Bluetooth" ? "Bluetooth interface connected · mouse availability unconfirmed" : Transport + " mouse interface connected";
 }
 
-internal sealed record MouseConnectionIdentity(string Key, string Name, string Transport, bool IsAuxiliary, int? BatteryPercent = null);
+internal sealed record MouseConnectionIdentity(string Key, string Name, string Transport, bool IsAuxiliary, int? BatteryPercent = null, string? MouseModelName = null);
 
 /// <summary>Windows device-tree inventory. Never sends a HID feature/output report.</summary>
 public static class MouseConnectionCatalog
@@ -30,11 +46,12 @@ public static class MouseConnectionCatalog
                 string brand = vendor switch { "1532" => "Razer", "1B1C" => "Corsair", "046D" => "Logitech", _ => "Windows" };
                 string name = string.IsNullOrWhiteSpace(id.Name) ? first.Device.Name : id.Name;
                 if (Generic(name) && id.Transport == "Bluetooth") name = (brand == "Windows" ? "" : brand + " ") + "Bluetooth mouse";
-                bool receiver = new[] { "receiver", "dongle", "dock", "transceiver" }.Any(w => name.Contains(w, StringComparison.OrdinalIgnoreCase));
+                bool receiver = IsReceiverName(name);
+                var models = group.Select(p => p.Identity.MouseModelName).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                 var levels = group.Select(p => p.Identity.BatteryPercent).Where(v => v is >= 0 and <= 100).Distinct().ToArray();
                 return new MouseConnection(group.Key, name, brand, id.Transport, receiver, id.IsAuxiliary,
                     group.Select(p => p.Device.DevicePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray())
-                    { BatteryPercent = levels.Length == 1 ? levels[0] : null };
+                    { BatteryPercent = levels.Length == 1 ? levels[0] : null, MouseModelName = models.Length == 1 ? models[0] : null };
             }).OrderBy(d => d.IsAuxiliary).ThenBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
     }
 
@@ -44,6 +61,7 @@ public static class MouseConnectionCatalog
         var parts = instance.Split('#');
         if (parts.Length >= 3) instance = string.Join('\\', parts.Take(3));
         string name = device.Name, key = instance, transport = "Windows";
+        string? mouseModel = null;
         int? battery = null;
         bool auxiliary = instance.Contains("VIRTUAL", StringComparison.OrdinalIgnoreCase) || instance.Contains("RDP_", StringComparison.OrdinalIgnoreCase);
         if (CM_Locate_DevNode(out uint node, instance, 0) != 0) return new(key, name, transport, auxiliary);
@@ -64,7 +82,11 @@ public static class MouseConnectionCatalog
             bluetooth |= id.StartsWith("BTH", StringComparison.OrdinalIgnoreCase);
             battery ??= ReadBattery(node, bluetooth);
             var friendly = TextProperty(node, new(new("a45c254e-df1c-4efd-8020-67d146a850e0"), 14));
-            var text = !string.IsNullOrWhiteSpace(friendly) && !Generic(friendly) ? friendly : TextProperty(node, new(new("540b947e-8b40-45bc-a8a2-6a0b894cbda2"), 4));
+            var busName = TextProperty(node, new(new("540b947e-8b40-45bc-a8a2-6a0b894cbda2"), 4));
+            if (mouseModel is null && id.StartsWith(@"HID\", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(busName) && !Generic(busName) && !IsReceiverName(busName))
+                mouseModel = busName;
+            var text = !string.IsNullOrWhiteSpace(friendly) && !Generic(friendly) ? friendly : busName;
             if (!string.IsNullOrWhiteSpace(text) && !Generic(text)) name = text;
             bluetooth |= id.StartsWith("BTH", StringComparison.OrdinalIgnoreCase);
             if (id.StartsWith(@"USB\VID_", StringComparison.OrdinalIgnoreCase) && !id.Contains("&MI_", StringComparison.OrdinalIgnoreCase))
@@ -78,7 +100,7 @@ public static class MouseConnectionCatalog
         }
         if (bluetooth) transport = "Bluetooth";
         auxiliary |= name.Contains("keyboard", StringComparison.OrdinalIgnoreCase) || name.Contains("virtual", StringComparison.OrdinalIgnoreCase);
-        return new(key, name, transport, auxiliary, battery);
+        return new(key, name, transport, auxiliary, battery, mouseModel);
     }
     private static int? ReadBattery(uint node, bool bluetooth)
     {
@@ -102,6 +124,9 @@ public static class MouseConnectionCatalog
     private static bool Generic(string value) => value.Equals("USB Composite Device", StringComparison.OrdinalIgnoreCase)
         || value.Equals("USB Input Device", StringComparison.OrdinalIgnoreCase) || value.StartsWith("HID-compliant", StringComparison.OrdinalIgnoreCase)
         || value.StartsWith("Bluetooth LE Device", StringComparison.OrdinalIgnoreCase);
+    private static bool IsReceiverName(string value) =>
+        value.Contains("receiver", StringComparison.OrdinalIgnoreCase) || value.Contains("dongle", StringComparison.OrdinalIgnoreCase)
+        || value.Contains("dock", StringComparison.OrdinalIgnoreCase) || value.Contains("transceiver", StringComparison.OrdinalIgnoreCase);
     private static string? TextProperty(uint node, DeviceProperty key)
     { var bytes = Property(node, key); return bytes is null ? null : Encoding.Unicode.GetString(bytes).TrimEnd('\0'); }
     private static byte[]? Property(uint node, DeviceProperty key)

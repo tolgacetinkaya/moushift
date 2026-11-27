@@ -4,7 +4,7 @@
 2. **All applications** is that mouse's fallback Circle. Choose **+ App-specific Circle** to open the searchable app list inside the workspace. The mouse inspector's **+ Add app** opens the same flow.
 3. Select an app and choose **Add & edit Circle**. A new Circle starts as a copy of this mouse's current fallback draft, including folders. Selecting an existing app reopens its Circle without replacing it.
 4. Keep **Switch Circle automatically with the active app** enabled for automatic switching. Drag actions onto the Circle and choose **Save changes**. Nothing is written when browsing or cancelling the picker; closing a changed editor offers to discard its draft.
-5. Assign Click Circle to a supported button for this mouse and enable Circle. The same button opens the app-specific Circle when that app is in front; other apps use **All applications**. Other mice keep their own profiles.
+5. Assign Click Circle to a supported button for this mouse and turn on **Mouse actions**. The same button opens the app-specific Circle when that app is in front; other apps use **All applications**. Other mice keep their own profiles.
 
 The editor's **Circle for** selector chooses what to edit, not the foreground app. **Switch with active app** controls automatic Circle switching for this mouse. When disabled, the adjacent selector chooses a fixed Circle. Existing saved switching preferences are preserved unless explicitly changed.
 

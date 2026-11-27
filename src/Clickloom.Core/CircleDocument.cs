@@ -9,13 +9,28 @@ public sealed class CircleDocument
     public List<RingSlot> Slots { get; private set; }
     public bool CanUndo => _undo.Count > 0;
     public bool CanRedo => _redo.Count > 0;
-    private readonly string _original;
+    private readonly List<RingSlot> _originalSlots;
+    private string _original;
     public bool IsChanged => JsonSerializer.Serialize(Slots) != _original;
     public CircleDocument(IEnumerable<RingSlot> slots)
     {
-        Slots = Copy(slots); _original = JsonSerializer.Serialize(Slots);
+        Slots = Copy(slots);
+        _originalSlots = Copy(Slots);
+        _original = JsonSerializer.Serialize(_originalSlots);
     }
     private static List<RingSlot> Copy(IEnumerable<RingSlot> slots) => slots.Select(s => s.DeepClone()).ToList();
+
+    public void RefreshActionSnapshots(IReadOnlyDictionary<string, CustomCircleAction> actions,
+        IReadOnlyDictionary<string, CustomCircleAction> deleted)
+    {
+        CustomCircleAction.UpdatePlacements(Slots, actions, deleted);
+        // Circle undo restores placement, while the library owns the linked action details.
+        foreach (var snapshot in _undo) CustomCircleAction.UpdatePlacements(snapshot, actions, deleted);
+        foreach (var snapshot in _redo) CustomCircleAction.UpdatePlacements(snapshot, actions, deleted);
+        CustomCircleAction.UpdatePlacements(_originalSlots, actions, deleted);
+        _original = JsonSerializer.Serialize(_originalSlots);
+    }
+
     private static List<RingSlot> Page(List<RingSlot> root, IReadOnlyList<int> parent)
     {
         if (parent.Count == 0) return root;

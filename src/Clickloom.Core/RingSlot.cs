@@ -1,6 +1,21 @@
+using System.Text.Json.Serialization;
+
 namespace Clickloom.Core;
 
 public enum RingSlotKind { Command, Folder, Adjustment }
+
+public sealed class RingOutline
+{
+    public const double MinimumThickness = 1;
+    public const double MaximumThickness = 8;
+    public const int MaximumColors = 6;
+
+    public bool Enabled { get; set; } = true;
+    public double Thickness { get; set; } = 3.5;
+    public List<string> Colors { get; set; } = ["#35E0A1"];
+
+    public RingOutline DeepClone() => new() { Enabled = Enabled, Thickness = Thickness, Colors = [.. Colors] };
+}
 
 public sealed class RingSlot
 {
@@ -11,11 +26,19 @@ public sealed class RingSlot
     public InputAction Action { get; set; } = new() { Kind = ActionKind.Disabled };
     public InputAction DecreaseAction { get; set; } = new() { Kind = ActionKind.Disabled };
     public InputAction IncreaseAction { get; set; } = new() { Kind = ActionKind.Disabled };
+    // Older builds see the disabled fallback for a shortcut sequence.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<InputAction>? Sequence { get; set; }
+    // A missing outline uses the normal appearance for this slot kind.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RingOutline? Outline { get; set; }
     public List<RingSlot> Children { get; set; } = [];
     public RingSlot DeepClone() => new()
     {
         Name = Name, Kind = Kind, DefinitionId = DefinitionId, Icon = Icon, Action = Action.DeepClone(),
         DecreaseAction = DecreaseAction.DeepClone(), IncreaseAction = IncreaseAction.DeepClone(),
+        Sequence = Sequence?.Select(step => step.DeepClone()).ToList(),
+        Outline = Outline?.DeepClone(),
         Children = Children.Select(child => child.DeepClone()).ToList()
     };
 }

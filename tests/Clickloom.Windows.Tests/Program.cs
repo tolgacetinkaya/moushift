@@ -72,9 +72,13 @@ var tests = new (string Name, Action Run)[]
     ("middle gate preserves native holds across concurrent mice and pause", MiddleGateHolds),
     ("middle gate does not capture a cycle already in progress", MiddleGateActivation),
     ("middle gate cleans up disconnected sources and reset", MiddleGateCleanup),
-    ("middle receiver handoff rejects stale delivery and fails open", MiddleGateDelivery),
+    ("driverless button handoff blocks assigned edges, replays defaults and fails open per button", ButtonGateDelivery),
+    ("only eligible side-button shortcuts replace native navigation", SideButtonReplacement),
     ("horizontal tilt resolves exact source, accumulates detents and coalesces repeats", RawCircleHorizontalWheel),
     ("driverless mouse actions resolve only for the assigned device and app", RawCircleIsolation),
+    ("Apply starts idle assignments and respects pause", ApplyActivation),
+    ("Mouse actions remembers intent across startup and route changes", RememberMouseActions),
+    ("back and forward shortcuts resolve once per press for the assigned mouse and application", RawSideShortcuts),
     ("driverless Circle resolves application and manual Circle profiles", RawCircleProfiles),
     ("driverless Circle retains press ownership across pause and connection refresh", RawCircleLifecycle),
     ("Raw Input mouse packet ABI and unthrottled button transitions", RawCirclePackets),
@@ -97,9 +101,8 @@ var tests = new (string Name, Action Run)[]
     ("newly enabled session cannot execute old work", EnableGeneration),
     ("passthrough down keeps passthrough up after a config change", PassthroughGesture),
     ("suppressed down keeps its action and up after pause", SuppressedGesture),
-    ("auxiliary key repeat cannot replace held gesture", AuxiliaryRepeat),
+    ("repeated mouse down cannot replace held gesture", RepeatedMouseDown),
     ("unmatched up does not manufacture a gesture", UnknownRelease),
-    ("auxiliary source accepts vendor injection and rejects our own", AuxiliarySources),
     ("unaccepted output prefix owns no keys", UnacceptedPrefix),
     ("Unicode odd prefix retains the matching release", UnicodePrefix),
     ("complete accepted key pairs retain no ownership", CompletePairs),
@@ -136,45 +139,77 @@ foreach (var (name, run) in tests)
 Console.WriteLine($"{tests.Length - failures}/{tests.Length} passed; no hooks started or input injected.");
 return failures == 0 ? 0 : 1;
 
-static void MiddleGateDelivery()
+static void ButtonGateDelivery()
 {
-    // Exercise the service's actual thread handoff without installing hooks or injecting input.
-    // A claimed raw press does not enqueue native replay in this isolated service.
+    // Run the real Raw Input/hook handoff without starting the worker or injecting replay.
     using var service = new MouseRemappingService();
     var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
     var type = typeof(MouseRemappingService);
-    var gate = (DriverlessMiddleGate)type.GetField("_middleGate", flags)!.GetValue(service)!;
-    var raw = type.GetMethod("RouteRawMiddle", flags)!;
-    var hook = type.GetMethod("BlockNativeMiddle", flags)!;
-    gate.Request(true);
-    raw.Invoke(service, ["a", true, InputAction.CreateTaskViewAssignment(), (nint)0]);
-    Require((bool)hook.Invoke(service, [true])!, "Delivered raw down did not allow suppression.");
-    raw.Invoke(service, ["a", false, null, (nint)0]);
-    Require((bool)hook.Invoke(service, [false])!, "Delivered raw up was not suppressed.");
+    var gates = (Dictionary<MouseControl, DriverlessButtonGate>)type.GetField("_buttonGates", flags)!.GetValue(service)!;
+    var queue = (System.Collections.Concurrent.ConcurrentQueue<(MouseControl Control, bool Pressed, nint Target)>)
+        type.GetField("_buttonReplays", flags)!.GetValue(service)!;
+    var raw = type.GetMethod("RouteRawButton", flags)!;
+    var hook = type.GetMethod("BlockNativeButton", flags)!;
+    ButtonGateResult Raw(MouseControl control, string path, bool down, bool replace)
+        => (ButtonGateResult)raw.Invoke(service, [control, path, down, replace, (nint)123])!;
+    bool Hook(MouseControl control, bool down) => (bool)hook.Invoke(service, [control, down])!;
+    foreach (var control in new[] { MouseControl.MiddleButton, MouseControl.XButton1, MouseControl.XButton2 })
+    {
+        gates[control].Request(true);
+        Require(Raw(control, "mapped", true, true).Claimed && Hook(control, true), $"{control} leaked an assigned down.");
+        Require(Raw(control, "default", true, false).NativePressed == true && Hook(control, true), $"{control} lost an unassigned down.");
+        Require(Raw(control, "mapped", false, false).ReleasedClaim && Hook(control, false), $"{control} leaked the assigned up after focus changed.");
+        Require(Raw(control, "default", false, true).NativePressed == false && Hook(control, false), $"{control} lost the unassigned up after a mapping change.");
+        Require(queue.TryDequeue(out var down) && down == (control, true, (nint)123)
+            && queue.TryDequeue(out var up) && up == (control, false, (nint)123) && queue.IsEmpty,
+            $"{control} replayed assigned input or used the wrong native button.");
+    }
+
+    Raw(MouseControl.XButton2, "mapped", true, true);
     var elapsed = System.Diagnostics.Stopwatch.StartNew();
-    Require(!(bool)hook.Invoke(service, [true])!, "Stale delivery proof swallowed a different click.");
-    Require(!gate.Capturing && service.LastError?.Contains("delivery is delayed") == true, "Missing source did not stop capture.");
+    Require(!Hook(MouseControl.XButton1, true), "A Forward edge or a stale Back edge was accepted as proof for a new Back press.");
+    Require(!gates[MouseControl.XButton1].Capturing && service.LastError?.Contains("delivery is delayed") == true,
+        "Missing source did not stop capture.");
     Require(elapsed.Elapsed < TimeSpan.FromSeconds(1), "Missing receiver blocked the hook indefinitely.");
+}
+
+static void SideButtonReplacement()
+{
+    var shortcut = new InputAction { Kind = ActionKind.Shortcut, Modifiers = KeyModifiers.Alt, KeyCode = 9 };
+    foreach (var control in new[] { MouseControl.XButton1, MouseControl.XButton2 })
+    {
+        Require(RawCircleRouter.ReplacesNative(control, shortcut), $"{control} kept its original navigation alongside Alt+Tab.");
+        Require(!RawCircleRouter.ReplacesNative(control, new InputAction())
+            && !RawCircleRouter.ReplacesNative(control, new InputAction { Kind = ActionKind.Ring })
+            && !RawCircleRouter.ReplacesNative(control, InputAction.CreateTaskViewAssignment()),
+            $"{control} acquired native ownership for a previously pass-through assignment.");
+
+        var gate = new DriverlessButtonGate();
+        gate.Request(true);
+        Require(gate.Hook(true) && gate.Raw("mouse", true, true).Claimed, $"{control} lost a hook-first press.");
+        Require(gate.Hook(false) && gate.Raw("mouse", false, false).ReleasedClaim, $"{control} lost a hook-first release.");
+    }
 }
 
 static void MiddleGateIsolation()
 {
-    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    var gate = new DriverlessButtonGate(); gate.Request(true);
     Require(gate.Capturing, "Neutral gate did not arm.");
-    Require(gate.Raw("a", true, true) == new MiddleGateResult(true, null), "Assigned source did not choose Circle only.");
+    Require(gate.Raw("a", true, true) == new ButtonGateResult(true, null), "Assigned source did not choose Circle only.");
     Require(gate.Hook(true), "Assigned physical down leaked.");
-    Require(gate.Raw("b", true, false) == new MiddleGateResult(false, true), "Other mouse lost native down.");
+    Require(gate.Raw("b", true, false) == new ButtonGateResult(false, true), "Other mouse lost native down.");
     Require(gate.Hook(true), "Replayed native down also passed through physically.");
     Require(gate.Raw("A", true, true) == default, "Repeated source down fired twice.");
-    Require(gate.Raw("a", false, false) == default && gate.Hook(false), "Circle release leaked or released another mouse.");
-    Require(gate.Raw("b", false, true) == new MiddleGateResult(false, false) && gate.Hook(false), "Native cycle changed with profile edits.");
+    Require(gate.Raw("a", false, false) is { ReleasedClaim: true, Claimed: false, NativePressed: null } && gate.Hook(false),
+        "Circle release leaked or released another mouse.");
+    Require(gate.Raw("b", false, true) == new ButtonGateResult(false, false) && gate.Hook(false), "Native cycle changed with profile edits.");
     Require(gate.Raw("a", true, false).NativePressed == true && gate.Hook(true), "Changed assignment did not restore native input.");
     Require(gate.Raw("a", false, false).NativePressed == false && gate.Hook(false), "Restored native release lost.");
 }
 
 static void MiddleGateHolds()
 {
-    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    var gate = new DriverlessButtonGate(); gate.Request(true);
     Require(gate.Raw("a", true, false).NativePressed == true && gate.Hook(true), "First native hold lost.");
     Require(gate.Raw("b", true, false).NativePressed is null && gate.Hook(true), "Second owner duplicated native down.");
     gate.Request(false);
@@ -188,7 +223,7 @@ static void MiddleGateHolds()
 
 static void MiddleGateActivation()
 {
-    var gate = new DriverlessMiddleGate();
+    var gate = new DriverlessButtonGate();
     gate.Raw("a", true, false); Require(!gate.Hook(true), "Inactive down blocked.");
     gate.Request(true, true); Require(!gate.Capturing, "Armed halfway through a physical hold.");
     Require(gate.Raw("a", false, true) == default && !gate.Hook(false), "Bypass cycle was taken over.");
@@ -201,14 +236,14 @@ static void MiddleGateActivation()
 
 static void MiddleGateCleanup()
 {
-    var gate = new DriverlessMiddleGate(); gate.Request(true);
+    var gate = new DriverlessButtonGate(); gate.Request(true);
     gate.Raw("a", true, false); gate.Hook(true);
     gate.Raw("b", true, true); gate.Hook(true);
     Require(!gate.RemoveSources(new HashSet<string>(["a", "b", "c"], StringComparer.OrdinalIgnoreCase)), "Unrelated arrival released native hold.");
     Require(!gate.RemoveSources(new HashSet<string>(["a"], StringComparer.OrdinalIgnoreCase)), "Removing Circle owner released native mouse.");
     Require(gate.RemoveSources(new HashSet<string>()), "Disconnect did not request native release.");
     gate.Reset(); Require(!gate.Capturing && !gate.Hook(false), "Reset left suppression active.");
-    gate.Request(true); Require(gate.Raw("a", true, true).Circle && gate.Hook(true), "Reconnect retained old cycle.");
+    gate.Request(true); Require(gate.Raw("a", true, true).Claimed && gate.Hook(true), "Reconnect retained old cycle.");
 }
 
 static void RawCircleHorizontalWheel()
@@ -258,8 +293,8 @@ static void RawCircleIsolation()
     var corsair = ProfileResolver.CreateDeviceDefault("corsair", "Corsair");
     corsair.Bindings.Single(b => b.Input == MouseControl.MiddleButton).Action = new() { Kind = ActionKind.Ring };
     corsair.RingSlots[0].Name = "Corsair action";
-    corsair.Bindings.Single(b => b.Input == MouseControl.XButton1).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Alt };
-    corsair.Bindings.Single(b => b.Input == MouseControl.XButton2).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Windows };
+    corsair.Bindings.Single(b => b.Input == MouseControl.LeftButton).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Alt };
+    corsair.Bindings.Single(b => b.Input == MouseControl.RightButton).Action = new() { Kind = ActionKind.Shortcut, KeyCode = 9, Modifiers = KeyModifiers.Windows };
     var other = ProfileResolver.CreateDeviceDefault("other", "Other mouse");
     settings.Profiles.AddRange([corsair, other]);
     var app = ApplicationCircleProfiles.GetOrCreate(settings, "corsair", @"C:\Apps\editor.exe", "Editor");
@@ -268,8 +303,8 @@ static void RawCircleIsolation()
     router.Update([new("corsair", "Corsair", "TEST", "USB", true, false, ["path:a"]), new("other", "Same VID/PID mouse", "TEST", "USB", true, false, ["path:b"])]);
     Require(router.Press(settings, "path:b", MouseControl.MiddleButton, true, true, null) is null, "An unassigned mouse inherited another mouse/shared Circle.");
     Require(router.Press(settings, "unknown", MouseControl.MiddleButton, true, true, null) is null, "Unknown source used a last-active mouse.");
-    Require(router.Press(settings, "path:a", MouseControl.XButton1, true, true, null) is null, "Driverless input executed a shortcut assignment.");
-    Require(router.Press(settings, "path:a", MouseControl.XButton2, true, true, null) is null, "A plain Win+Tab shortcut opted into driverless Task View.");
+    Require(router.Press(settings, "path:a", MouseControl.LeftButton, true, true, null) is null, "A side-button shortcut was enabled for left clicks.");
+    Require(router.Press(settings, "path:a", MouseControl.RightButton, true, true, null) is null, "A plain Win+Tab shortcut opted into driverless Task View on right click.");
     var result = router.Press(settings, "PATH:A", MouseControl.MiddleButton, true, true, null);
     Require(result?.DeviceKey == "corsair" && result.RingSlots[0].Name == "Corsair action", "Exact source did not resolve its Circle.");
     result!.RingSlots[0].Name = "Detached";
@@ -284,6 +319,61 @@ static void RawCircleIsolation()
     router.Press(settings, "path:b", MouseControl.MiddleButton, false, true, null);
     Require(router.Press(settings, "path:b", MouseControl.MiddleButton, true, true, app.ApplicationPath) is null,
         "Task View crossed mouse identities.");
+}
+
+static void ApplyActivation()
+{
+    var state = new AssignmentActivation();
+    Require(!state.IsEnabled && state.Enable(onlyFromStartup: true), "Apply could not start idle assignments.");
+    Require(state.Pause() && !state.Enable(onlyFromStartup: true) && !state.IsEnabled, "Apply overrode pause.");
+    Require(state.Enable(onlyFromStartup: false) && state.IsEnabled, "Explicit resume did not rearm.");
+    var stoppedBeforeFirstApply = new AssignmentActivation();
+    stoppedBeforeFirstApply.Pause();
+    Require(!stoppedBeforeFirstApply.Enable(onlyFromStartup: true), "Emergency pause while idle was lost.");
+}
+
+static void RememberMouseActions()
+{
+    var on = new AssignmentActivation(true);
+    Require(on.IsWaiting && !on.IsEnabled && on.Preference == true, "Saved On ran before a source was ready.");
+    Require(on.Enable(true) && on.Suspend() && on.IsWaiting && on.Preference == true, "Disconnect lost On.");
+    Require(on.Enable(true) && on.IsEnabled, "Reconnect did not restore On.");
+    on.Suspend();
+    on.Pause();
+    Require(!on.Enable(true) && on.Preference == false, "Delayed activation overrode emergency Off.");
+    var off = new AssignmentActivation(on.Preference);
+    Require(!off.Enable(true) && !off.IsWaiting, "Apply ignored saved Off.");
+    off.RequestOn();
+    Require(off.IsWaiting && off.Enable(true), "Switch could not reactivate saved Off.");
+}
+
+static void RawSideShortcuts()
+{
+    var settings = AppSettings.CreateDefault();
+    var mouse = ProfileResolver.CreateDeviceDefault("a", "A");
+    mouse.Bindings.Single(b => b.Input == MouseControl.XButton1).Action = new() { Kind = ActionKind.Shortcut, Modifiers = KeyModifiers.Alt, KeyCode = 9 };
+    settings.Profiles.Add(mouse);
+    settings.Profiles.Add(ProfileResolver.CreateDeviceDefault("b", "B"));
+    var app = ApplicationCircleProfiles.GetOrCreate(settings, "a", @"C:\Apps\editor.exe", "Editor");
+    app.Bindings.Single(b => b.Input == MouseControl.XButton2).Action = new() { Kind = ActionKind.Shortcut, Modifiers = KeyModifiers.Control, KeyCode = 0x46 };
+    var router = new RawCircleRouter();
+    router.Update([new("a", "A", "TEST", "USB", false, false, ["path:a"]), new("b", "B", "TEST", "USB", false, false, ["path:b"])]);
+    InputAction? Edge(string path, MouseControl button, bool down = true, string? foreground = null, bool enabled = true)
+        => router.Press(settings, path, button, down, enabled, foreground)?.Bindings.Single(b => b.Input == button).Action;
+
+    var back = MouseControl.XButton1;
+    var forward = MouseControl.XButton2;
+    Require(Edge("path:b", back) is null && Edge("unknown", back) is null, "Another or unknown mouse acquired Alt+Tab.");
+    Require(Edge("path:a", back) is { Kind: ActionKind.Shortcut, Modifiers: KeyModifiers.Alt, KeyCode: 9 }, "Back did not resolve to Alt+Tab.");
+    Require(Edge("path:a", back, foreground: app.ApplicationPath) is null, "A focus change while holding Back repeated the shortcut.");
+    Require(Edge("path:a", back, down: false) is null && Edge("path:a", back)?.Modifiers == KeyModifiers.Alt, "A release repeated the action or failed to rearm Back.");
+    Require(Edge("path:a", forward) is null, "An application-only Forward assignment leaked into the default profile.");
+    Edge("path:a", forward, down: false);
+    Require(Edge("path:a", forward, foreground: app.ApplicationPath, enabled: false) is null, "Paused input executed Forward.");
+    Require(Edge("path:a", forward, foreground: app.ApplicationPath) is null, "Re-enabling while held executed Forward.");
+    Edge("path:a", forward, down: false);
+    Require(Edge("path:a", forward, foreground: app.ApplicationPath) is { Kind: ActionKind.Shortcut, Modifiers: KeyModifiers.Control, KeyCode: 0x46 },
+        "Forward did not use the foreground application's shortcut.");
 }
 
 static void RawCircleProfiles()
@@ -424,6 +514,19 @@ static void ConnectionGrouping()
     if (!receiver.IsReceiver || !receiver.Status.Contains("receiver connected") || !receiver.Status.Contains("unconfirmed") || devices[^1].Key != "virtual"
         || devices.Single(d => d.Key == "corsair").IsReceiver)
         throw new Exception("Receiver presence was confused with mouse power or a physical input.");
+    Require(receiver.Name == "Razer Mouse Dock Pro" && receiver.DisplayName == "Razer mouse"
+        && (receiver with { Name = "CORSAIR DARK CORE RGB PRO Gaming Dongle", Manufacturer = "Corsair" }).DisplayName == "CORSAIR DARK CORE RGB PRO"
+        && devices.Single(d => d.Key == "corsair").DisplayName == "Corsair mouse"
+        && devices.Single(d => d.Key == "virtual").DisplayName == "Virtual mouse",
+        "Mouse cards should distinguish a receiver from a directly reported mouse.");
+    var mouseInterfaces = inputs.Take(2).ToArray();
+    var named = MouseConnectionCatalog.Build(mouseInterfaces, d => new("razer", "Razer Mouse Dock Pro", "USB", false,
+        MouseModelName: d.DevicePath == "razer-one" ? "Razer Test Model" : null)).Single();
+    Require(named.Key == receiver.Key && named.Name == receiver.Name && named.DisplayName == "Razer Test Model",
+        "A reported mouse model should label the existing receiver connection without changing its identity.");
+    var ambiguous = MouseConnectionCatalog.Build(mouseInterfaces, d => new("razer", "Razer Mouse Dock Pro", "USB", false,
+        MouseModelName: d.DevicePath)).Single();
+    Require(ambiguous.DisplayName == receiver.DisplayName, "Conflicting interface names should keep the generic mouse label.");
     if (MouseConnectionCatalog.Build([], _ => throw new Exception()).Count != 0)
         throw new Exception("An unplugged mouse remained in the inventory.");
 }
@@ -548,35 +651,25 @@ static void SuppressedGesture()
         && ReferenceEquals(gesture.Action, action), "Captured action/token was replaced before UP.");
 }
 
-static void AuxiliaryRepeat()
+static void RepeatedMouseDown()
 {
-    var ledger = new InputGestureLedger<int>();
+    var ledger = new InputGestureLedger<MouseControl>();
     var original = new InputGesture(true, new InputAction { Kind = ActionKind.Shortcut, KeyCode = 67 }, 5, 100);
-    ledger.Begin(0x7C, original);
-    Require(ledger.TryGet(0x7C, out var repeated) && ReferenceEquals(repeated, original), "Repeated key down cannot recover original suppression.");
-    Throws<InvalidOperationException>(() => ledger.Begin(0x7C, new InputGesture(false, null, 6, 200)), "Autorepeat replaced a held action.");
-    Require(ledger.Release(0x7C, out var released) && ReferenceEquals(released, original), "Key UP did not release the original gesture.");
-    ledger.Begin(0x7C, new InputGesture(false, null, 6, 201));
-    Require(ledger.Release(0x7C, out var next) && !next.Suppressed, "A subsequent physical press did not start a new gesture.");
+    ledger.Begin(MouseControl.XButton1, original);
+    Require(ledger.TryGet(MouseControl.XButton1, out var repeated) && ReferenceEquals(repeated, original), "Repeated button down cannot recover original suppression.");
+    Throws<InvalidOperationException>(() => ledger.Begin(MouseControl.XButton1, new InputGesture(false, null, 6, 200)), "Repeated down replaced a held action.");
+    Require(ledger.Release(MouseControl.XButton1, out var released) && ReferenceEquals(released, original), "Button UP did not release the original gesture.");
+    ledger.Begin(MouseControl.XButton1, new InputGesture(false, null, 6, 201));
+    Require(ledger.Release(MouseControl.XButton1, out var next) && !next.Suppressed, "A subsequent physical press did not start a new gesture.");
 }
 
 static void UnknownRelease()
 {
-    var ledger = new InputGestureLedger<int>();
-    Require(!ledger.Release(0x7C, out _), "Unmatched key UP manufactured a captured action.");
-    ledger.Begin(0x7C, new InputGesture(false, null, 0, 0));
-    Require(!ledger.Release(0x7D, out _), "Another key's UP released the held gesture.");
-    Require(ledger.TryGet(0x7C, out _), "Unknown UP discarded another gesture.");
-}
-
-static void AuxiliarySources()
-{
-    Require(AuxiliaryInputFilter.ShouldObserve(0x7C, 0, 0), "Physical F13 must be observable.");
-    Require(AuxiliaryInputFilter.ShouldObserve(0x87, 0x10, 123), "Manufacturer-software F24 must be observable even when injected.");
-    Require(!AuxiliaryInputFilter.ShouldObserve(0x7C, 0x10, NativeMethods.InjectionMarker), "Our injected F13 could recursively invoke itself.");
-    Require(!AuxiliaryInputFilter.ShouldObserve(0x87, 0, NativeMethods.InjectionMarker), "Own output marker must always prevent recursion.");
-    foreach (var key in new uint[] { 0x41, 0x79, 0x7B, 0x88 })
-        Require(!AuxiliaryInputFilter.ShouldObserve(key, 0x10, 123), "Ordinary/emergency key was captured by auxiliary route.");
+    var ledger = new InputGestureLedger<MouseControl>();
+    Require(!ledger.Release(MouseControl.XButton1, out _), "Unmatched button UP manufactured a captured action.");
+    ledger.Begin(MouseControl.XButton1, new InputGesture(false, null, 0, 0));
+    Require(!ledger.Release(MouseControl.XButton2, out _), "Another button's UP released the held gesture.");
+    Require(ledger.TryGet(MouseControl.XButton1, out _), "Unknown UP discarded another gesture.");
 }
 
 static void UnacceptedPrefix()
@@ -793,8 +886,11 @@ static void MissingDeviceLibrary()
 static void CaptureIdle()
 {
     var state = new ShortcutCaptureTracker();
-    Require(!state.Process(0, 65, false, false, false, 0).Suppress, "Idle capture consumed typing.");
-    Require(!state.Process(0, 65, true, false, true, 0).Suppress && !state.HasOwnedKeys, "Idle capture owned an unrelated key.");
+    foreach (int key in new[] { 65, 0x7C, 0x87 })
+    {
+        Require(!state.Process(0, key, false, false, false, 0).Suppress, "Idle capture consumed a key down.");
+        Require(!state.Process(0, key, true, false, true, 0).Suppress && !state.HasOwnedKeys, "Idle capture owned a key release.");
+    }
 }
 static void CaptureAltTab()
 {
